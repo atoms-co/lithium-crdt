@@ -1,0 +1,40 @@
+// Proto schema formatted by Wire, do not edit.
+// Source: com/css/internal/shared/storage/crdt/data/merge_options.proto
+
+syntax = "proto3";
+
+package com.css.internal.shared.storage.crdt.data.options;
+
+import "google/protobuf/descriptor.proto";
+
+enum FieldMergeStrategy {
+  // Recursively merge into child fields using their strategies.
+  // For primitives, behaves like REPLACE.
+  // Conflicts resolved by version comparator (default: last-write-wins).
+  MERGE = 0;
+  // Replace entire field value atomically without merging child fields.
+  // Conflicts resolved by version comparator (default: last-write-wins).
+  REPLACE = 1;
+  // Increment/decrement operations that commute.
+  // Only valid for numeric primitive fields.
+  COUNTER = 2;
+}
+
+extend google.protobuf.FieldOptions {
+  // How to merge concurrent writes to this field
+  FieldMergeStrategy crdt_merge_strategy = 9100;
+  // For repeated fields: which field number of the contained message is the ID.
+  // When set, repeated fields merge by ID rather than position.
+  // The ID field must be a primitive value that uniquely identifies elements.
+  int32 crdt_id_field = 9101;
+  // Valid for map and repeated types with crdt_id_field
+  // When tombstones are removed all values with data will update versions to shift to the minimum bounded version in
+  // the window calculated by the oldest valid tombstone to ensure merges are ignored by the new minimum version and
+  // current data is not lost.
+  int32 crdt_max_tombstones = 9102;
+  // Valid for map and repeated types with crdt_id_field.
+  // TTL relative to latest value's version (> max(Version.timestamp) - ttl)
+  // When tombstones are removed all values with data will update versions to shift to the minimum bounded version in
+  // the ttl window to ensure merges are ignored by the new minimum ttl and current data is not lost.
+  int64 crdt_tombstone_ttl = 9103;
+}

@@ -1,0 +1,27 @@
+// Proto schema formatted by Wire, do not edit.
+// Source: com/css/internal/shared/storage/crdt/data/version_count.proto
+
+syntax = "proto3";
+
+package com.css.internal.shared.storage.crdt.data;
+
+option java_multiple_files = true;
+
+// Tracks a single actor's contribution to a Counter CRDT.
+// 
+// Each actor maintains their own version counter (monotonically increasing)
+// and the value they've contributed. During merge, the highest version per
+// actor wins (last-write-wins per actor).
+// 
+// NOTE: This version is the actor's version counter (actor_version), NOT the
+// full Version triple. The timestamp is derived from the VersionNode.version
+// during conflict resolution.
+message VersionCount {
+  // The actor's version counter (monotonically increasing per actor)
+  // Corresponds to Version.actor_version field
+  int64 version = 1;
+
+  // The counter value contributed by this actor
+  // Total counter value = sum of all actor values
+  int64 value = 2;
+}

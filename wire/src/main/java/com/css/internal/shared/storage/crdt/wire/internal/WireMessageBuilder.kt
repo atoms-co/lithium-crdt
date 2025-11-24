@@ -1,0 +1,10 @@
+package com.css.internal.shared.storage.crdt.wire.internal
+
+import com.css.internal.shared.storage.crdt.resolver.descriptor.MessageBuilder
+import com.squareup.wire.Message
+
+internal class WireMessageBuilder<M : Message<M, B>, B : Message.Builder<M, B>>(
+    override val setter: WireMessageConstructorBuilder<M, B>
+) : MessageBuilder<M, WireMessageConstructorBuilder<M, B>> {
+    override fun build(): M = setter.build()
+}

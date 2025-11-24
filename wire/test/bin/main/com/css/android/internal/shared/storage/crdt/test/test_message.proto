@@ -1,0 +1,140 @@
+// Proto schema formatted by Wire, do not edit.
+// Source: com/css/android/internal/shared/storage/crdt/test/test_message.proto
+
+syntax = "proto3";
+
+package com.css.android.internal.shared.storage.crdt.test;
+
+import "google/protobuf/timestamp.proto";
+import "com/css/internal/shared/storage/crdt/data/merge_options.proto";
+
+option java_multiple_files = true;
+
+message TestMessage {
+  double doubleValue = 1;
+
+  float floatValue = 2;
+
+  int32 int32Value = 3;
+
+  int64 int64Value = 4;
+
+  uint32 uint32Value = 5;
+
+  uint64 uint64Value = 6;
+
+  sint32 sint32Value = 7;
+
+  sint64 sint64Value = 8;
+
+  fixed32 fixed32Value = 9;
+
+  fixed64 fixed64Value = 10;
+
+  sfixed32 sfixed32Value = 11;
+
+  bool boolValue = 12;
+
+  string stringValue = 13;
+
+  bytes bytesValue = 14;
+
+  EnumSample enumValue = 15;
+
+  NestedMessage nestedValue = 16;
+
+  oneof oneOfValue {
+    string oneOfValue1 = 17;
+    NestedMessage oneOfValue2 = 18;
+  }
+
+  map<string, int32> primitiveMapValue = 19;
+
+  map<string, NestedMessage> nestedMapValue = 20;
+
+  map<string, EnumSample> enumMapValue = 21;
+
+  repeated NestedMessage nestedListValue = 22;
+
+  repeated NestedMessageWithId nestedListWithIdValue = 23 [
+    (com.css.internal.shared.storage.crdt.data.options.crdt_id_field) = 45,
+    (com.css.internal.shared.storage.crdt.data.options.crdt_max_tombstones) = 10,
+    (com.css.internal.shared.storage.crdt.data.options.crdt_tombstone_ttl) = 500
+  ];
+
+  optional int32 primitiveOptionalValue = 24;
+
+  optional NestedMessage nestedOptionalValue = 25;
+
+  google.protobuf.Timestamp timestamp_value = 26;
+
+  NestedMessage nestedBinaryValue = 27 [(com.css.internal.shared.storage.crdt.data.options.crdt_merge_strategy) = REPLACE];
+
+  EmptyType emptyValue = 28;
+
+  repeated EnumSample enumListValue = 29;
+
+  repeated int32 primitiveListValue = 30;
+
+  int64 counterValue = 31 [(com.css.internal.shared.storage.crdt.data.options.crdt_merge_strategy) = COUNTER];
+
+  repeated int32 replacedListValue = 32 [
+    (com.css.internal.shared.storage.crdt.data.options.crdt_merge_strategy) = REPLACE,
+    (com.css.internal.shared.storage.crdt.data.options.crdt_max_tombstones) = 10,
+    (com.css.internal.shared.storage.crdt.data.options.crdt_tombstone_ttl) = 1000
+  ];
+
+  map<string, int32> replacedMapValue = 33 [(com.css.internal.shared.storage.crdt.data.options.crdt_merge_strategy) = REPLACE];
+
+  map<string, int32> counterMapValue = 34 [(com.css.internal.shared.storage.crdt.data.options.crdt_merge_strategy) = COUNTER];
+
+  repeated int32 counterListValue = 35 [(com.css.internal.shared.storage.crdt.data.options.crdt_merge_strategy) = COUNTER];
+
+  repeated int32 nonPackedInt32 = 36 [packed = false];
+
+  // Deep nesting test fields for comprehensive coverage
+  map<int32, NestedMessage> int32KeyNestedMap = 37;
+
+  map<int64, NestedMessage> int64KeyNestedMap = 38;
+
+  map<bool, NestedMessage> boolKeyNestedMap = 39;
+
+  map<int32, NestedRepeatedMessage> int32KeyDeepMap = 40;
+
+  map<int64, NestedRepeatedMessage> int64KeyDeepMap = 41;
+}
+
+enum EnumSample {
+  UNKNOWN = 0;
+  VALUE1 = 2;
+  VALUE2 = 1;
+}
+
+message NestedMessage {
+  optional string stringValue = 42;
+
+  optional int32 intValue = 43;
+
+  repeated NestedRepeatedMessage nestedRepeatedMessage = 44;
+}
+
+message NestedMessageWithId {
+  string id = 45;
+
+  string stringValue = 46;
+
+  int32 intValue = 47;
+}
+
+message EmptyType {}
+
+message NestedRepeatedMessage {
+  map<string, NestedMessage> nestedMessageMap = 48;
+
+  int32 intValue = 49;
+
+  // Additional map types for deep nesting tests (enables depth 7+)
+  map<int32, NestedMessage> int32KeyMap = 50;
+
+  map<int64, NestedMessage> int64KeyMap = 51;
+}

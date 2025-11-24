@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="GradleSettings">
+    <option name="linkedExternalProjectsSettings">
+      <GradleProjectSettings>
+        <option name="externalProjectPath" value="$PROJECT_DIR$" />
+        <option name="gradleJvm" value="#JAVA_HOME" />
+        <option name="modules">
+          <set>
+            <option value="$PROJECT_DIR$" />
+            <option value="$PROJECT_DIR$/data" />
+            <option value="$PROJECT_DIR$/fixtures" />
+            <option value="$PROJECT_DIR$/protoc" />
+            <option value="$PROJECT_DIR$/protoc-data" />
+            <option value="$PROJECT_DIR$/protoc/test" />
+            <option value="$PROJECT_DIR$/resolver" />
+            <option value="$PROJECT_DIR$/wire" />
+            <option value="$PROJECT_DIR$/wire/test" />
+          </set>
+        </option>
+      </GradleProjectSettings>
+    </option>
+  </component>
+</project>

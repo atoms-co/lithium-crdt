@@ -48,7 +48,7 @@ graph TB
         E --> F["Field-Level LWW Strategy"]
     end
     
-    subgraph "Data Structures (crdt/data)"
+    subgraph "Data Structures (crdt/wire-data)"
         F --> G["VersionNode Tree"]
         F --> H["VersionSequence"]
     end
@@ -187,7 +187,7 @@ Wire generates sealed classes for OneOf fields in Kotlin, requiring specialized 
 **Traditional CRDT Libraries:** O(F × D) wrapper overhead for F fields at depth D
 **Wire Module:** O(m) version nodes where m = modified field count (not total fields)
 
-**Architectural Basis:** Parallel version tree structure (see `crdt/data/README.md`) eliminates value duplication and marshalling costs.
+**Architectural Basis:** Parallel version tree structure (see `crdt/wire-data/README.md`) eliminates value duplication and marshalling costs.
 
 ---
 
@@ -208,7 +208,7 @@ Future enhancement will support record diffs instead of full-message synchroniza
 ## Related Modules
 
 - **`crdt/resolver`**: Authoritative source for field-level resolution algorithms and strategies
-- **`crdt/data`**: Defines VersionNode, VersionSequence, and DistributedDocument schemas
+- **`crdt/wire-data`**: Defines VersionNode, VersionSequence, and DistributedDocument schemas
 - **`crdt/protoc`**: Parallel implementation for standard protoc-generated messages
 - **`crdt/api`**: High-level DocumentStore abstraction both implementations conform to
 - **`crdt/core`**: Complete production system integrating all CRDT components

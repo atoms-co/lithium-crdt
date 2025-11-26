@@ -1,0 +1,259 @@
+syntax = "proto3";
+
+package com.css.protobuf.crdt.data;
+
+option java_multiple_files = true;
+
+import "google/protobuf/timestamp.proto";
+import "com/css/protobuf/crdt/data/version_change.proto";
+import "com/css/protobuf/crdt/data/version_node.proto";
+
+/*
+ * Complete document state for distributed synchronization between devices.
+ *
+ * DistributedDocument represents the full data payload that can be transmitted
+ * between devices to achieve synchronization in a CRDT system. It contains both
+ * the actual document content and all necessary versioning metadata to enable
+ * conflict-free merging across multiple devices.
+ *
+ * SYNCHRONIZATION WORKFLOW:
+ * 1. Devices first compare version_vector maps for fast sync decisions
+ * 2. If synchronization is needed, full DistributedDocument is transmitted
+ * 3. Receiving device merges using version_node for conflict resolution
+ * 4. Document data is updated with merged content
+ * 5. Local versioning state is updated with latest actor versions
+ *
+ * DUAL-LAYER VERSIONING:
+ * The document uses a two-tier versioning approach for efficiency:
+ * - version_vector: Fast comparison for sync decisions (from Actors message)
+ * - version_node: Detailed versioning tree for actual merge operations
+ *
+ * This design allows devices to quickly determine if sync is needed without
+ * transmitting or processing the full version tree until absolutely necessary.
+ *
+ * COMPLETE SYNCHRONIZATION PAYLOAD:
+ * When transmitted between devices, this message provides everything needed:
+ * - Document identity and lifecycle metadata
+ * - Encoded content data
+ * - Complete version history for conflict resolution
+ * - Actor version state for future sync optimizations
+ * - Schema versioning for backward compatibility
+ *
+ * Example synchronization between devices:
+ *   Device A creates document: id="doc123", version_vector={1001: 1}
+ *   Device B modifies document: version_vector={1001: 1, 1002: 1}
+ *   Device A receives update: merges version_node, updates version_vector
+ *   Result: Both devices have consistent state with version_vector={1001: 1, 1002: 1}
+ *
+ * PERFORMANCE CHARACTERISTICS:
+ * - Small documents: Low overhead, fast transmission
+ * - Large documents: Version tree scales independently of content size
+ * - Many actors: Bounded growth proportional to active device count
+ * - Frequent updates: Efficient delta-based synchronization possible
+ */
+message DistributedDocument {
+  // Unique document identifier across all devices in the distributed system
+  string id = 1;
+
+  // Timestamp when document was originally created (immutable)
+  google.protobuf.Timestamp created = 2;
+
+  // Timestamp of most recent modification to document content or metadata
+  google.protobuf.Timestamp updated = 3;
+
+  // Encoded document data containing the actual content
+  // Format determined by application - could be protobuf, JSON, binary, etc.
+  // Version tree in version_node handles versioning of this data's structure
+  bytes data = 4;
+
+  // Complete version tree for conflict-free merging of document changes
+  // Contains detailed versioning information for every field/element in the document
+  // Used during synchronization to resolve conflicts and merge changes from multiple devices
+  VersionNode version_node = 5;
+
+  // Tombstone flag indicating document has been deleted
+  // Deleted documents are kept for synchronization purposes to handle conflicts
+  // between deletion and concurrent modifications on different devices
+  bool deleted = 6;
+
+  // Map of actor id -> latest local monotonic version applied by that device
+  // Duplicated from Actors message for complete synchronization payload
+  // Enables fast sync decisions and maintains actor version state
+  // Key: Actor ID (unique device identifier)
+  // Value: Highest version number applied by that actor to this document
+  map<int64, int64> version_vector = 7;
+
+  // Schema version for backward compatibility during document evolution
+  // Allows handling of documents created with different application versions
+  int32 schema_version = 8;
+}
+
+/*
+ * Multi-actor synchronization payload for bringing devices up to speed.
+ *
+ * DocumentSync represents a collection of changes from multiple actors across
+ * a range of versions, designed to efficiently synchronize a device that has
+ * been offline or needs to catch up on many changes.
+ *
+ * MULTI-ACTOR RANGE SYNCHRONIZATION:
+ * DocumentSync can contain changes from multiple actors across different version ranges:
+ * - Squashed/compressed representation of many individual DocumentDelta operations
+ * - Optimized for bulk synchronization rather than real-time collaboration
+ * - May represent the final state after conflict resolution between multiple actors
+ *
+ * SYNCHRONIZATION SCENARIOS:
+ * - Device comes online after extended offline period
+ * - Initial synchronization of new device joining document
+ * - Batch synchronization during low-bandwidth periods
+ * - Recovery synchronization after network partition
+ *
+ * VERSION RANGE SEMANTICS:
+ * The version_ranges map indicates what actor versions are covered in this sync:
+ * - Key: Actor ID
+ * - Value: VersionRange indicating from/to versions included
+ * - Receiving device can determine what changes are covered
+ *
+ * Example sync bringing device up to speed on document with changes from 3 actors:
+ *   DocumentSync {
+ *     document_id: "user123"
+ *     version_ranges: {
+ *       1001: VersionRange{from: 5, to: 10},  // Actor 1001 versions 5-10
+ *       1002: VersionRange{from: 1, to: 3},   // Actor 1002 versions 1-3
+ *       1003: VersionRange{from: 1, to: 1}    // Actor 1003 version 1
+ *     }
+ *     changes: [
+ *       // Potentially squashed/optimized changes representing final state
+ *       // after all conflicts resolved between the actors in version ranges
+ *     ]
+ *   }
+ */
+message DocumentSync {
+  // Document identifier that this sync applies to
+  string document_id = 1;
+
+  // Version ranges covered by this sync for each actor
+  // Key: Actor ID, Value: Range of versions from that actor included in this sync
+  map<int64, VersionRange> version_ranges = 2;
+
+  // List of data changes representing the cumulative effect of all changes
+  // in the version ranges - may be optimized/squashed representation
+  repeated DataChange changes = 3;
+
+  // Timestamp when this sync was created
+  google.protobuf.Timestamp created = 4;
+}
+
+/*
+ * Version range specification for multi-actor synchronization.
+ *
+ * Represents a contiguous range of versions for a single actor that are
+ * included in a DocumentSync operation.
+ */
+message VersionRange {
+  // Starting version number (inclusive)
+  int64 from_version = 1;
+
+  // Ending version number (inclusive)
+  int64 to_version = 2;
+}
+
+/*
+ * Delta-based document synchronization payload containing incremental changes.
+ *
+ * DocumentDelta represents a single atomic change event from one actor that can be applied
+ * to update a document incrementally. This is more efficient for real-time collaboration
+ * where individual user actions need to be transmitted as they occur.
+ *
+ * SINGLE-ACTOR ATOMIC CHANGE:
+ * Each DocumentDelta represents one logical change operation performed by a single actor:
+ * - All changes in the delta have the same actor ID and form a coherent operation
+ * - Changes represent parts of a single user action (e.g., updating multiple related fields)
+ * - Version represents the single version number for this actor's change event
+ *
+ * DELTA SYNCHRONIZATION WORKFLOW:
+ * 1. User performs action, generating multiple related DataChange entries
+ * 2. DocumentDelta is created with single actor version and list of changes
+ * 3. Delta is transmitted to other devices in real-time
+ * 4. Receiving device applies changes using merge logic
+ * 5. Document state and version information is updated incrementally
+ *
+ * Example delta for user updating profile (email + display name in one action):
+ *   DocumentDelta {
+ *     document_id: "user123"
+ *     actor_id: 1001
+ *     version: 6
+ *     changes: [
+ *       DataChange {
+ *         data: "john.doe@newcompany.com"
+ *         version_change: VersionChange {
+ *           path: [PathComponent{field_number: 2}]  // email field
+ *           node: VersionNode{version: [1001, 6]}
+ *         }
+ *       },
+ *       DataChange {
+ *         data: "John Doe"
+ *         version_change: VersionChange {
+ *           path: [PathComponent{field_number: 3}]  // display_name field
+ *           node: VersionNode{version: [1001, 6]}
+ *         }
+ *       }
+ *     ]
+ *   }
+ */
+message DocumentDelta {
+  // Document identifier that this delta applies to
+  string document_id = 1;
+
+  // Actor that performed this change operation
+  int64 actor_id = 2;
+
+  // Version number for this actor's change event
+  // All changes in this delta will reference this same actor version
+  int64 version = 3;
+
+  // List of individual data changes included in this atomic operation
+  // Each change updates a specific path but all are part of the same user action
+  repeated DataChange changes = 4;
+
+  // Timestamp when this delta was created
+  google.protobuf.Timestamp created = 5;
+}
+
+/*
+ * Individual data change combining content and versioning information.
+ *
+ * DataChange represents a single modification to a specific location in the
+ * document, containing both the new data value and the version metadata
+ * needed for conflict-free merging.
+ *
+ * DATA ENCODING:
+ * The 'data' field contains the serialized value for the location specified
+ * by the path in version_change. The encoding depends on the data type:
+ * - Primitive types: Direct protobuf encoding (string, int32, bool, etc.)
+ * - Complex types: Serialized protobuf message bytes
+ * - Deletions: Empty bytes (tombstone indicated by version only)
+ *
+ * PATH SEMANTICS:
+ * The path in version_change.path specifies exactly where this data should
+ * be applied in the document structure:
+ * - [field_number: 2] → Update root-level field 2
+ * - [field_number: 5, string_key: "role"] → Update map entry "role" in field 5
+ * - [field_number: 6, repeated_index: 0] → Update first element of list in field 6
+ *
+ * MERGE BEHAVIOR:
+ * When applying this change, the receiving device will:
+ * 1. Navigate to the specified path in the document
+ * 2. Compare version_change.node.version with existing version at that path
+ * 3. Apply last-write-wins or other CRDT semantics
+ * 4. Update both the data content and version information if change wins
+ */
+message DataChange {
+  // Serialized data value for the location specified by version_change.path
+  // Format depends on the data type at that path location
+  // Empty for deletions (version-only tombstone)
+  bytes data = 1;
+
+  // Version change information specifying path and version for this data
+  // Contains both navigation path and version metadata for conflict resolution
+  VersionChange version_change = 2;
+}

@@ -1,6 +1,5 @@
 plugins {
     alias(libs.plugins.kotlin.jvm)
-    `java-library`
     `maven-publish`
 }
 
@@ -11,8 +10,8 @@ dependencies {
     implementation(libs.wire.runtime)
 
     // Project dependencies
-    implementation(project(":data"))
-    implementation(project(":resolver"))
+    implementation(projects.wireData)
+    implementation(projects.resolver)
 
     // Test dependencies
     testImplementation(libs.kotlin.coroutines.test)
@@ -21,8 +20,8 @@ dependencies {
     testImplementation(libs.truth)
     testImplementation(libs.junit.jupiter)
 
-    testImplementation(project(":fixtures"))
-    testImplementation(project(":wire-test"))
+    testImplementation(projects.fixtures)
+    testImplementation(projects.wireTest)
 
     testRuntimeOnly(libs.junit.jupiter.engine)
     testRuntimeOnly(libs.junit.platform.launcher)

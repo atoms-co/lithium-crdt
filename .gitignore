@@ -1,6 +1,7 @@
 # Gradle
 .gradle/
 build/
+bin/
 .kotlin/
 *.log
 !gradle-wrapper.jar

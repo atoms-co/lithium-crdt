@@ -1,6 +1,5 @@
 plugins {
     alias(libs.plugins.kotlin.jvm)
-    `java-library`
     `maven-publish`
 }
 
@@ -9,16 +8,16 @@ dependencies {
     implementation(libs.protobuf.java)
 
     // Project dependencies
-    implementation(project(":protoc-data"))
-    implementation(project(":resolver"))
+    implementation(projects.protocData)
+    implementation(projects.resolver)
 
     // Test dependencies
     testImplementation(libs.mockk)
     testImplementation(libs.truth)
     testImplementation(libs.junit.jupiter)
 
-    testImplementation(project(":fixtures"))
-    testImplementation(project(":protoc-test"))
+    testImplementation(projects.fixtures)
+    testImplementation(projects.protocTest)
 
     testRuntimeOnly(libs.junit.jupiter.engine)
     testRuntimeOnly(libs.junit.platform.launcher)

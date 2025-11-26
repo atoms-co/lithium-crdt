@@ -1,7 +1,6 @@
 plugins {
     alias(libs.plugins.kotlin.jvm)
     alias(libs.plugins.protobuf)
-    `java-library`
     `maven-publish`
 }
 
@@ -19,8 +18,8 @@ protobuf {
     sourceSets {
         main {
             proto {
-                // Source proto files from data module
-                srcDir(project(":data").file("src/main/proto"))
+                // Source proto files from wire-data module
+                srcDir(project(":wire-data").file("src/main/proto"))
             }
         }
     }

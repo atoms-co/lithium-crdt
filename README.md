@@ -5,16 +5,13 @@ A Protocol Buffer CRDT library for distributed conflict-free synchronization. En
 ## Quick Start
 
 ```bash
-# 1. Setup local configuration (optional - defaults work for VPN users)
-cp local.properties.example local.properties
-
-# 2. Build
+# 1. Build
 ./gradlew build
 
-# 3. Run tests
+# 2. Run tests
 ./gradlew test
 
-# 4. Publish to local Maven for testing
+# 3. Publish to local Maven for testing
 ./gradlew publishToMavenLocal
 ```
 
@@ -24,8 +21,8 @@ cp local.properties.example local.properties
 
 ```kotlin
 dependencies {
-    implementation("com.css.internal.shared.storage.crdt:crdt-wire:1.0.0")
-    implementation("com.css.internal.shared.storage.crdt:crdt-data:1.0.0")
+    implementation("com.css.protobuf.crdt:crdt-wire:1.0.0")
+    implementation("com.css.protobuf.crdt:crdt-wire-data:1.0.0")
 }
 ```
 
@@ -34,8 +31,8 @@ dependencies {
 ```python
 maven_install(
     artifacts = [
-        "com.css.internal.shared.storage.crdt:crdt-protoc:1.0.0",
-        "com.css.internal.shared.storage.crdt:crdt-protoc-data:1.0.0",
+        "com.css.protobuf.crdt:crdt-protoc:1.0.0",
+        "com.css.protobuf.crdt:crdt-protoc-data:1.0.0",
     ],
     repositories = ["https://artifactory.cssvpn.com/artifactory/monorepo-local"],
 )
@@ -57,48 +54,14 @@ See [CLAUDE.md](CLAUDE.md) for comprehensive architecture documentation.
 | Module | Description | For |
 |--------|-------------|-----|
 | `resolver` | Core conflict resolution algorithms | All platforms |
-| `data` | Wire-generated protobuf classes | Android/Kotlin |
+| `wire-data` | Wire-generated protobuf classes | Android/Kotlin |
 | `wire` | Wire CRDT implementation | Android/Kotlin |
-| `protoc` | Protoc CRDT implementation | Java backend |
 | `protoc-data` | Protoc-generated protobuf classes | Java backend |
-
-## Development
-
-### Building
-```bash
-./gradlew build
-```
-
-### Running Tests
-```bash
-./gradlew test
-```
-
-### Publishing
-```bash
-# Publish to local Maven
-./gradlew publishToMavenLocal
-
-# Publish to Artifactory
-./gradlew publish
-```
-
-### Configuration
-
-The library uses the same Artifactory authentication as the Android project:
-
-- **VPN Mode** (default): No configuration needed
-- **No-VPN Mode**: Set `css.buildWithoutVpn=true` in `local.properties` and configure `~/.netrc`
-- **Offline Mode**: Set `css.airplaneMode=true` in `local.properties`
-
-See [BUILD_SETUP.md](BUILD_SETUP.md) for detailed configuration instructions.
+| `protoc` | Protoc CRDT implementation | Java backend |
 
 ## Documentation
 
-- [CLAUDE.md](CLAUDE.md) - Comprehensive architecture and development guide
-- [BUILD_SETUP.md](BUILD_SETUP.md) - Build system setup and configuration
-- [local.properties.example](local.properties.example) - Local configuration template
-- Module READMEs: [data](data/README.md), [resolver](resolver/README.md), [wire](wire/README.md), [protoc](protoc/README.md)
+- Module READMEs: [wire-data](wire-data/README.md), [resolver](resolver/README.md), [wire](wire/README.md), [protoc](protoc/README.md)
 
 ## Requirements
 

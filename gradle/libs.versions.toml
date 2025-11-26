@@ -9,7 +9,6 @@ coroutines = "1.10.2"
 
 [libraries]
 # Kotlin
-kotlin-stdlib = { module = "org.jetbrains.kotlin:kotlin-stdlib", version.ref = "kotlin" }
 kotlin-test = { module = "org.jetbrains.kotlin:kotlin-test", version.ref = "kotlin" }
 kotlin-coroutines = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "coroutines" }
 kotlin-coroutines-test = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-test", version.ref = "coroutines" }
@@ -19,12 +18,10 @@ protobuf-java = { module = "com.google.protobuf:protobuf-java", version.ref = "p
 
 # Wire
 wire-runtime = { module = "com.squareup.wire:wire-runtime", version.ref = "wire" }
-wire-schema = { module = "com.squareup.wire:wire-schema", version.ref = "wire" }
 wire-compiler = { module = "com.squareup.wire:wire-compiler", version.ref = "wire" }
 
 # Testing
 junit-jupiter = { module = "org.junit.jupiter:junit-jupiter", version.ref = "junit" }
-junit-jupiter-api = { module = "org.junit.jupiter:junit-jupiter-api", version.ref = "junit" }
 junit-jupiter-engine = { module = "org.junit.jupiter:junit-jupiter-engine", version.ref = "junit" }
 junit-platform-launcher = "org.junit.platform:junit-platform-launcher:1.10.2"
 mockk = "io.mockk:mockk:1.13.10"

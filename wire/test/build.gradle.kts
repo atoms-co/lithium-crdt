@@ -1,12 +1,11 @@
 plugins {
     alias(libs.plugins.kotlin.jvm)
-    `java-library`
 }
 
 dependencies {
     implementation(libs.wire.runtime)
-    implementation(project(":data"))
-    implementation(project(":fixtures"))
+    implementation(projects.wireData)
+    implementation(projects.fixtures)
 }
 
 // Configure Wire proto compilation for test messages
@@ -15,7 +14,7 @@ val generateWireTestProtos by tasks.registering(JavaExec::class) {
     group = "build"
 
     val protoSourceDir = file("src/main/proto")
-    val dataProtoDir = project(":data").file("src/main/proto")
+    val dataProtoDir = project(":wire-data").file("src/main/proto")
     val outputDir = layout.buildDirectory.dir("generated/source/wire").get().asFile
 
     inputs.dir(protoSourceDir)

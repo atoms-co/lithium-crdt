@@ -16,7 +16,7 @@ The repository is organized into 6 modules with clear separation of concerns:
 
 - **`resolver/`** - Platform-agnostic CRDT conflict resolution algorithms with zero external dependencies beyond Kotlin stdlib. Contains the core logic for field-level LWW semantics, version tree traversal, map/collection strategies, and tombstone cleanup policies. All resolution logic is shared by both Wire and Protoc implementations.
 
-- **`data/`** - Protobuf schema definitions (`*.proto` files in `src/main/proto/`) and Wire-generated Kotlin classes. Defines `VersionNode`, `VersionSequence`, `DistributedDocument`, and `Actors` message structures. This is the single source of truth for schemas.
+- **`wire-data/`** - Protobuf schema definitions (`*.proto` files in `src/main/proto/`) and Wire-generated Kotlin classes. Defines `VersionNode`, `VersionSequence`, `DistributedDocument`, and `Actors` message structures. This is the single source of truth for schemas.
 
 ### Platform-Specific Implementations
 
@@ -24,7 +24,7 @@ The repository is organized into 6 modules with clear separation of concerns:
 
 - **`protoc/`** - CRDT resolver for standard Google protobuf (Java/backend). Uses `getDescriptor()` for runtime field introspection via descriptors. Entry point: `CrdtMessageResolverProvider`
 
-- **`protoc-data/`** - Java protobuf class generation from schemas in `data/`. Enables backend services to use the same proto definitions without depending on Wire.
+- **`protoc-data/`** - Java protobuf class generation from schemas in `wire-data/`. Enables backend services to use the same proto definitions without depending on Wire.
 
 ### Testing Support
 
@@ -47,7 +47,7 @@ This repository uses **Gradle 9.2.1 with Kotlin DSL** as a standalone library in
 
 # Build specific module
 ./gradlew :resolver:build
-./gradlew :data:build
+./gradlew :wire-data:build
 ./gradlew :wire:build
 ./gradlew :protoc:build
 ./gradlew :protoc-data:build
@@ -73,7 +73,7 @@ This repository uses **Gradle 9.2.1 with Kotlin DSL** as a standalone library in
 #### Proto Schema Compilation
 ```bash
 # Wire compilation for data module
-./gradlew :data:generateWireProtos
+./gradlew :wire-data:generateWireProtos
 
 # Wire compilation for wire-test module
 ./gradlew :wire-test:generateWireTestProtos
@@ -82,7 +82,7 @@ This repository uses **Gradle 9.2.1 with Kotlin DSL** as a standalone library in
 ./gradlew :protoc-data:generateProto
 
 # Clean and regenerate all protos
-./gradlew clean :data:generateWireProtos :protoc-data:generateProto
+./gradlew clean :wire-data:generateWireProtos :protoc-data:generateProto
 ```
 
 #### Publishing to Maven Repository
@@ -122,7 +122,7 @@ The library publishes 5 artifacts to Maven repositories:
 | `crdt-protoc` | protoc | Protoc CRDT implementation |
 | `crdt-protoc-data` | protoc-data | Protoc-generated data classes |
 
-**Group ID:** `com.css.internal.shared.storage.crdt`
+**Group ID:** `com.css.protobuf.crdt`
 
 #### Artifactory Configuration
 
@@ -161,8 +161,8 @@ dependencyResolutionManagement {
 // In app/build.gradle.kts
 dependencies {
     // For Android/Kotlin projects
-    implementation("com.css.internal.shared.storage.crdt:crdt-wire:1.0.0")
-    implementation("com.css.internal.shared.storage.crdt:crdt-data:1.0.0")
+    implementation("com.css.protobuf.crdt:crdt-wire:1.0.0")
+    implementation("com.css.protobuf.crdt:crdt-data:1.0.0")
 }
 ```
 
@@ -174,9 +174,9 @@ load("@rules_jvm_external//:defs.bzl", "maven_install")
 
 maven_install(
     artifacts = [
-        "com.css.internal.shared.storage.crdt:crdt-protoc:1.0.0",
-        "com.css.internal.shared.storage.crdt:crdt-protoc-data:1.0.0",
-        "com.css.internal.shared.storage.crdt:crdt-resolver:1.0.0",
+        "com.css.protobuf.crdt:crdt-protoc:1.0.0",
+        "com.css.protobuf.crdt:crdt-protoc-data:1.0.0",
+        "com.css.protobuf.crdt:crdt-resolver:1.0.0",
     ],
     repositories = [
         "https://your-artifactory.com/libs-release-local",
@@ -240,11 +240,11 @@ The library separates local writes from incoming conflict resolution:
 
 **resolver/**: Pure Kotlin with generic interfaces. No protobuf dependencies. Uses interface-based design for maximum reusability (`CrdtResolver`, `MessageFieldDescriptor`, `VersionNodeAdapter`).
 
-**wire/**: Kotlin with Wire protobuf. Uses annotations (`@WireField`) for field introspection. Package structure: `com.css.internal.shared.storage.crdt.wire` with internal implementation classes in `.internal` subpackage.
+**wire/**: Kotlin with Wire protobuf. Uses annotations (`@WireField`) for field introspection. Package structure: `com.css.protobuf.crdt.wire` with internal implementation classes in `.internal` subpackage.
 
-**protoc/**: Kotlin/Java with Google protobuf. Uses descriptor reflection (`FieldDescriptor`, `Descriptor`). Package structure: `com.css.internal.shared.storage.crdt.protoc`.
+**protoc/**: Kotlin/Java with Google protobuf. Uses descriptor reflection (`FieldDescriptor`, `Descriptor`). Package structure: `com.css.protobuf.crdt.protoc`.
 
-**data/**: Proto schema definitions in `src/main/proto/com/css/internal/shared/storage/crdt/data/`. Wire-generated classes in `src/main/kotlin/`. Follow proto3 syntax.
+**wire-data/**: Proto schema definitions in `src/main/proto/com/css/protobuf/crdt/data/`. Wire-generated classes in `src/main/kotlin/`. Follow proto3 syntax.
 
 ### Critical Implementation Details
 

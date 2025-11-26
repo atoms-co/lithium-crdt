@@ -1,0 +1,16 @@
+syntax = "proto3";
+
+package com.css.protobuf.crdt.data;
+
+option java_multiple_files = true;
+
+message PathComponent {
+  oneof key {
+    int32 field_number = 1;    // For struct field access (protobuf field numbers)
+    string string_key = 2;     // For string map access
+    int32 int32_key = 3;       // For int32 map access
+    int64 int64_key = 4;       // For int64 map access
+    bool bool_key = 5;         // For bool map access
+    int32 repeated_index = 6;  // For repeated field access
+  }
+}

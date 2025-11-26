@@ -36,7 +36,7 @@ graph TB
         E --> F["Field-Level Strategies"]
     end
     
-    subgraph "Data Structures (crdt/data)"
+    subgraph "Data Structures (crdt/wire-data)"
         F --> G["VersionNode Tree"]
         F --> H["VersionSequence"]
     end
@@ -168,7 +168,7 @@ The Protoc module ensures Java backend services apply identical conflict resolut
 ## Related Modules
 
 - **`crdt/resolver`**: Authoritative source for conflict resolution algorithms
-- **`crdt/data`**: Defines version structures used by both Wire and Protoc
+- **`crdt/wire-data`**: Defines version structures used by both Wire and Protoc
 - **`crdt/protoc-data`**: Provides Java protobuf classes from shared proto schemas
 - **`crdt/wire`**: Parallel implementation for Wire-generated Kotlin classes
 - **`crdt/api`**: High-level DocumentStore abstraction both implementations support

@@ -6,7 +6,7 @@ This module provides Java protobuf class generation from shared proto schemas, e
 
 ### Cross-Platform Data Format Solution
 
-**Problem:** The `crdt/data` module defines proto schemas compiled with Wire for Kotlin, but Java backend services and other platforms needed access to the same data structures without depending on Wire.
+**Problem:** The `crdt/wire-data` module defines proto schemas compiled with Wire for Kotlin, but Java backend services and other platforms needed access to the same data structures without depending on Wire.
 
 **Alternatives Considered:**
 
@@ -34,7 +34,7 @@ The Protoc-Data module is a build-time compilation layer producing Java classes 
 ```mermaid
 graph TB
     subgraph "Proto Schema Source"
-        A["crdt/data/src/main/proto"] --> B["version_node.proto"]
+        A["crdt/wire-data/src/main/proto"] --> B["version_node.proto"]
         A --> C["document.proto"]
         A --> D["actors.proto"]
     end
@@ -120,7 +120,7 @@ Both Wire and protoc must handle schema changes identically for cross-platform c
 **What This Module IS NOT:**
 - CRDT resolution logic (see `crdt/protoc` module)
 - DocumentStore implementation (see `crdt/core` module)
-- Proto schema definitions (defined in `crdt/data` module)
+- Proto schema definitions (defined in `crdt/wire-data` module)
 
 ### 5. Generated Java API Patterns
 
@@ -140,7 +140,7 @@ Backend services deserialize CRDT data received from Android clients using stand
 **Access Pattern:**
 1. Deserialize `DistributedDocument` from bytes
 2. Access version information from `version_node` field
-3. Deserialize business data from `data` field
+3. Deserialize business data from `wire-data` field
 4. Use `version_vector` for fast sync decisions
 
 ### For CRDT Resolution
@@ -160,11 +160,11 @@ Integration tests verify Wire and protoc generate compatible bytes by:
 
 ## Build Configuration
 
-The module's build configuration sources proto files from `crdt/data` rather than duplicating them:
+The module's build configuration sources proto files from `crdt/wire-data` rather than duplicating them:
 
 **Key Configuration Points:**
 - Uses standard Google protobuf compiler
-- Sources proto files from `crdt/data` module
+- Sources proto files from `crdt/wire-data` module
 - Generates Java classes only (no Kotlin extensions)
 - Produces standard Java protobuf builder patterns
 
@@ -194,7 +194,7 @@ See `crdt/protoc` module for CRDT resolution logic tests.
 
 ### When NOT to Use This Module
 
-- **Kotlin/Android Code:** Use `crdt/data` Wire-generated classes for better Kotlin ergonomics
+- **Kotlin/Android Code:** Use `crdt/wire-data` Wire-generated classes for better Kotlin ergonomics
 - **CRDT Operations:** Use `crdt/protoc` module which includes resolution logic
 - **Custom Serialization:** This module is protobuf-only
 
@@ -202,18 +202,18 @@ See `crdt/protoc` module for CRDT resolution logic tests.
 
 ## Related Modules
 
-- **`crdt/data`**: Defines the proto schemas this module compiles (Wire output)
+- **`crdt/wire-data`**: Defines the proto schemas this module compiles (Wire output)
 - **`crdt/protoc`**: CRDT resolver implementation for protoc-generated classes
 - **`crdt/wire`**: Parallel CRDT resolver for Wire-generated classes
 - **`crdt/api`**: High-level DocumentStore API both resolvers implement
 
 ## Contributing Guidelines
 
-When modifying proto schemas in `crdt/data`:
+When modifying proto schemas in `crdt/wire-data`:
 
 1. **Test Both Outputs:** Verify changes work with both Wire and protoc compilation
 2. **Backward Compatibility:** Never reuse field numbers, always add new fields as optional
-3. **Update READMEs:** Document breaking changes in both `crdt/data` and `crdt/protoc-data`
+3. **Update READMEs:** Document breaking changes in both `crdt/wire-data` and `crdt/protoc-data`
 4. **Cross-Platform Tests:** Add integration tests verifying wire format compatibility
 
 **Critical:** Schema changes affect both Kotlin (Wire) and Java (protoc) consumers. Coordinate changes across platform teams.

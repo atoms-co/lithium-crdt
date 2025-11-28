@@ -1,0 +1,136 @@
+inputs:
+  ref:
+    type: string
+    required: false
+    default: origin/master
+    description: "Git ref to release (branch or SHA). Default: origin/master"
+  bump:
+    type: string
+    required: false
+    default: "patch"
+    description: "Version bump type: major, minor, or patch (Default: patch)"
+    options: ["major", "minor", "patch", "none"]
+  version:
+    type: string
+    required: false
+    default: ""
+    description: "Explicit version override (skips auto-increment if provided)"
+
+secrets:
+  artifactory-username: artifactory-username
+  artifactory-password : artifactory-password
+
+jobs:
+  publish:
+    steps:
+      - name: Checkout
+        id: checkout
+        uses: action/checkout
+        with:
+          repository: protobuf-crdt
+          ref: ${{ inputs.ref }}
+
+      - name: Setup Java
+        id: setup
+        run: |
+          # Ensure Java 17+ is available
+          java -version
+
+      # Note: Requires CI runner to have write access (ssh-key) to push version bump commits
+      - name: Bump Version
+        id: bump_version
+        run: |
+          # Skip if explicit version provided
+          if [ -n "${{ inputs.version }}" ]; then
+            echo "Using explicit version: ${{ inputs.version }}"
+            echo "EXPLICIT_VERSION=${{ inputs.version }}" >> $GITHUB_ENV
+            exit 0
+          fi
+
+          # Skip if bump=none
+          if [ "${{ inputs.bump }}" = "none" ]; then
+            echo "Skipping version bump (bump=none)"
+            exit 0
+          fi
+
+          echo "Bumping ${{ inputs.bump }} version..."
+          chmod +x scripts/bump-version.sh
+          ./scripts/bump-version.sh ${{ inputs.bump }}
+
+          # Read the new version
+          MAJOR=$(grep "^version.major=" gradle.properties | cut -d'=' -f2)
+          MINOR=$(grep "^version.minor=" gradle.properties | cut -d'=' -f2)
+          PATCH=$(grep "^version.patch=" gradle.properties | cut -d'=' -f2)
+          NEW_VERSION="$MAJOR.$MINOR.$PATCH"
+          echo "NEW_VERSION=$NEW_VERSION" >> $GITHUB_ENV
+
+          # Commit and push the version bump
+          git add gradle.properties
+          git commit -m "Bump version to $NEW_VERSION"
+          git push origin ${{ inputs.ref }}
+
+      - name: Build
+        id: build
+        run: |
+          ./gradlew clean build --no-daemon
+
+      - name: "Publish to Artifactory"
+        id: publish
+        env:
+          ARTIFACTORY_PASSWORD: ${{ secrets.artifactory-password }}
+          ARTIFACTORY_USERNAME: ${{ secrets.artifactory-username }}
+        run: |
+          # Use explicit version if provided, otherwise use version from gradle.properties
+          if [ -n "$EXPLICIT_VERSION" ]; then
+            VERSION="$EXPLICIT_VERSION"
+            echo "Publishing version: $VERSION (explicit override)"
+            ./gradlew publish -Pversion="$VERSION" --no-daemon
+          else
+            # Use version from gradle.properties (possibly bumped)
+            MAJOR=$(grep "^version.major=" gradle.properties | cut -d'=' -f2)
+            MINOR=$(grep "^version.minor=" gradle.properties | cut -d'=' -f2)
+            PATCH=$(grep "^version.patch=" gradle.properties | cut -d'=' -f2)
+            VERSION="$MAJOR.$MINOR.$PATCH"
+            echo "Publishing version: $VERSION"
+            ./gradlew publish --no-daemon
+          fi
+
+post:
+  - on: success
+    run: |
+      sha=$(git rev-parse HEAD)
+      if [ -n "${{ inputs.version }}" ]; then
+        version="${{ inputs.version }}"
+      else
+        # Read version from gradle.properties
+        MAJOR=$(grep "^version.major=" gradle.properties | cut -d'=' -f2)
+        MINOR=$(grep "^version.minor=" gradle.properties | cut -d'=' -f2)
+        PATCH=$(grep "^version.patch=" gradle.properties | cut -d'=' -f2)
+        version="$MAJOR.$MINOR.$PATCH"
+      fi
+      echo ":rocket: Successfully published *protobuf-crdt* version \`$version\` from branch \`${{ inputs.ref }}\` @ <https://github.com/csscompany-enterprise/protobuf-crdt/commit/$sha|$sha>" > /tmp/publish-success-msg
+  - on: success
+    uses: action/slack
+    with:
+      receiver: android
+      message: /tmp/publish-success-msg
+      type: file
+  - on: failure
+    run: |
+      sha=$(git rev-parse HEAD)
+      if [ -n "${{ inputs.version }}" ]; then
+        version="${{ inputs.version }}"
+      else
+        # Read version from gradle.properties
+        MAJOR=$(grep "^version.major=" gradle.properties | cut -d'=' -f2)
+        MINOR=$(grep "^version.minor=" gradle.properties | cut -d'=' -f2)
+        PATCH=$(grep "^version.patch=" gradle.properties | cut -d'=' -f2)
+        version="$MAJOR.$MINOR.$PATCH"
+      fi
+      echo ":warning: Failed to publish *protobuf-crdt* version \`$version\` from branch \`${{ inputs.ref }}\` @ <https://github.com/csscompany-enterprise/protobuf-crdt/commit/$sha|$sha>" > /tmp/publish-failure-msg
+  - on: failure
+    uses: action/slack
+    with:
+      receiver: android
+      message: /tmp/publish-failure-msg
+      type: file

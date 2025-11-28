@@ -1,0 +1,32 @@
+inputs:
+  ref:
+    type: string
+    required: false
+    default: origin/master
+    description: "Git ref to build (branch or SHA). Default: origin/master"
+
+jobs:
+  build-and-test:
+    steps:
+      - name: Checkout
+        id: checkout
+        uses: action/checkout
+        with:
+          repository: protobuf-crdt
+          ref: ${{ inputs.ref }}
+
+      - name: Setup Java
+        id: setup
+        run: |
+          # Ensure Java 17+ is available
+          java -version
+
+      - name: Build
+        id: build
+        run: |
+          ./gradlew clean build --no-daemon
+
+      - name: Run Tests
+        id: test
+        run: |
+          ./gradlew test --no-daemon

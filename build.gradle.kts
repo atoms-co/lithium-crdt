@@ -65,7 +65,7 @@ subprojects {
                         findPropertyFromProject(
                             project,
                             "artifactoryUrl",
-                            "https://artifactory.cssvpn.com/artifactory/monorepo-local"
+                            "https://artifactory.cssvpn.com/artifactory/maven-release"
                         )
                     )
                     credentials {

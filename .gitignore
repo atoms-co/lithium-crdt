@@ -1,5 +1,6 @@
 # Gradle
 .gradle/
+.idea/
 build/
 bin/
 .kotlin/

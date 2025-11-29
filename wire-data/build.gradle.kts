@@ -7,6 +7,11 @@ plugins {
 wire {
     protoLibrary = true
 
+    // Source proto files from the data module
+    sourcePath {
+        srcDir(project(":data").file("src/main/proto"))
+    }
+
     kotlin {
         buildersOnly = false
         javaInterop = false

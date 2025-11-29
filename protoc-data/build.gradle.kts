@@ -18,8 +18,8 @@ protobuf {
     sourceSets {
         main {
             proto {
-                // Source proto files from wire-data module
-                srcDir(project(":wire-data").file("src/main/proto"))
+                // Source proto files from data module
+                srcDir(project(":data").file("src/main/proto"))
             }
         }
     }

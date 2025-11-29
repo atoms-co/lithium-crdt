@@ -28,8 +28,8 @@ protobuf {
             proto {
                 // Reference proto files from wire-test module
                 srcDir(project(":wire-test").file("src/main/proto"))
-                // Also include wire-data module protos
-                srcDir(project(":wire-data").file("src/main/proto"))
+                // Also include data module protos
+                srcDir(project(":data").file("src/main/proto"))
             }
         }
     }

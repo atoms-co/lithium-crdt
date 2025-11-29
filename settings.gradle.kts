@@ -26,6 +26,7 @@ dependencyResolutionManagement {
 }
 
 // Include all modules
+include(":data")
 include(":resolver")
 include(":wire-data")
 include(":wire")

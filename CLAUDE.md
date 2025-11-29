@@ -10,21 +10,25 @@ This is a Conflict-Free Replicated Data Type (CRDT) library for Protocol Buffer 
 
 ## Module Architecture
 
-The repository is organized into 6 modules with clear separation of concerns:
+The repository is organized into 7 modules with clear separation of concerns:
 
 ### Core Modules
 
 - **`resolver/`** - Platform-agnostic CRDT conflict resolution algorithms with zero external dependencies beyond Kotlin stdlib. Contains the core logic for field-level LWW semantics, version tree traversal, map/collection strategies, and tombstone cleanup policies. All resolution logic is shared by both Wire and Protoc implementations.
 
-- **`wire-data/`** - Protobuf schema definitions (`*.proto` files in `src/main/proto/`) and Wire-generated Kotlin classes. Defines `VersionNode`, `VersionSequence`, `DistributedDocument`, and `Actors` message structures. This is the single source of truth for schemas.
+- **`data/`** - Pure protobuf schema definitions (`*.proto` files in `src/main/proto/`). Defines `VersionNode`, `VersionSequence`, `DistributedDocument`, and `Actors` message structures. This is the single source of truth for all proto schemas. Publishes a proto JAR artifact for consumption by build systems like Bazel.
+
+### Data Generation Modules
+
+- **`wire-data/`** - Wire-generated Kotlin classes from the `data` module schemas. Provides idiomatic Kotlin data classes for Android/Kotlin projects.
+
+- **`protoc-data/`** - Java protobuf class generation from the `data` module schemas. Enables backend services to use the same proto definitions without depending on Wire.
 
 ### Platform-Specific Implementations
 
 - **`wire/`** - CRDT resolver for Square Wire protobuf library (Kotlin/Android). Uses `@WireField` annotations for compile-time field metadata, providing zero-reflection overhead. Entry point: `WireCrdtResolverProvider`
 
 - **`protoc/`** - CRDT resolver for standard Google protobuf (Java/backend). Uses `getDescriptor()` for runtime field introspection via descriptors. Entry point: `CrdtMessageResolverProvider`
-
-- **`protoc-data/`** - Java protobuf class generation from schemas in `wire-data/`. Enables backend services to use the same proto definitions without depending on Wire.
 
 ### Testing Support
 
@@ -47,6 +51,7 @@ This repository uses **Gradle 9.2.1 with Kotlin DSL** as a standalone library in
 
 # Build specific module
 ./gradlew :resolver:build
+./gradlew :data:build
 ./gradlew :wire-data:build
 ./gradlew :wire:build
 ./gradlew :protoc:build
@@ -244,7 +249,11 @@ The library separates local writes from incoming conflict resolution:
 
 **protoc/**: Kotlin/Java with Google protobuf. Uses descriptor reflection (`FieldDescriptor`, `Descriptor`). Package structure: `com.css.protobuf.crdt.protoc`.
 
-**wire-data/**: Proto schema definitions in `src/main/proto/com/css/protobuf/crdt/data/`. Wire-generated classes in `src/main/kotlin/`. Follow proto3 syntax.
+**data/**: Proto schema definitions in `src/main/proto/com/css/protobuf/crdt/data/`. Follow proto3 syntax.
+
+**wire-data/**: Wire-generated classes in `src/main/kotlin/`.
+
+**protoc-data/**: Protoc-generated classes in `src/main/java/`.
 
 ### Critical Implementation Details
 

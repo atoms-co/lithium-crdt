@@ -6,9 +6,11 @@ option java_multiple_files = true;
 
 import "google/protobuf/timestamp.proto";
 
+import "com/css/protobuf/crdt/data/document.proto";
 import "com/css/protobuf/crdt/data/merge_options.proto";
 
 message TestMessage {
+  option (com.css.protobuf.crdt.data.crdt_type_name) = "TestMessage";
   double doubleValue = 1;
   float floatValue = 2;
   int32 int32Value = 3;

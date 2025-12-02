@@ -17,6 +17,7 @@
             <option value="$PROJECT_DIR$/protoc/test" />
             <option value="$PROJECT_DIR$/resolver" />
             <option value="$PROJECT_DIR$/wire" />
+            <option value="$PROJECT_DIR$/wire-data" />
             <option value="$PROJECT_DIR$/wire/test" />
           </set>
         </option>

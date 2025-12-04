@@ -1,0 +1,89 @@
+syntax = "proto3";
+
+package com.css.protobuf.crdt.data;
+
+option java_multiple_files = true;
+
+import "google/protobuf/timestamp.proto";
+import "com/css/protobuf/crdt/data/crdt_data.proto";
+import "com/css/protobuf/crdt/data/version_node.proto";
+
+/*
+ * Complete document state for distributed synchronization between devices.
+ *
+ * DistributedDocument represents the full data payload that can be transmitted
+ * between devices to achieve synchronization in a CRDT system. It contains both
+ * the actual document content and all necessary versioning metadata to enable
+ * conflict-free merging across multiple devices.
+ *
+ * SYNCHRONIZATION WORKFLOW:
+ * 1. Devices first compare version_vector maps for fast sync decisions
+ * 2. If synchronization is needed, full DistributedDocument is transmitted
+ * 3. Receiving device merges using version_node for conflict resolution
+ * 4. Document data is updated with merged content
+ * 5. Local versioning state is updated with latest actor versions
+ *
+ * DUAL-LAYER VERSIONING:
+ * The document uses a two-tier versioning approach for efficiency:
+ * - version_vector: Fast comparison for sync decisions (from Actors message)
+ * - version_node: Detailed versioning tree for actual merge operations
+ *
+ * This design allows devices to quickly determine if sync is needed without
+ * transmitting or processing the full version tree until absolutely necessary.
+ *
+ * COMPLETE SYNCHRONIZATION PAYLOAD:
+ * When transmitted between devices, this message provides everything needed:
+ * - Document identity and lifecycle metadata
+ * - Encoded content data
+ * - Complete version history for conflict resolution
+ * - Actor version state for future sync optimizations
+ * - Schema versioning for backward compatibility
+ *
+ * Example synchronization between devices:
+ *   Device A creates document: id="doc123", version_vector={1001: 1}
+ *   Device B modifies document: version_vector={1001: 1, 1002: 1}
+ *   Device A receives update: merges version_node, updates version_vector
+ *   Result: Both devices have consistent state with version_vector={1001: 1, 1002: 1}
+ *
+ * PERFORMANCE CHARACTERISTICS:
+ * - Small documents: Low overhead, fast transmission
+ * - Large documents: Version tree scales independently of content size
+ * - Many actors: Bounded growth proportional to active device count
+ * - Frequent updates: Efficient delta-based synchronization possible
+ */
+message DistributedDocument {
+  // Unique document identifier across all devices in the distributed system
+  string id = 1;
+
+  // Timestamp when document was originally created (immutable)
+  google.protobuf.Timestamp created = 2;
+
+  // Timestamp of most recent modification to document content or metadata
+  google.protobuf.Timestamp updated = 3;
+
+  // Encoded document data containing the actual content
+  // Format determined by application - could be protobuf, JSON, binary, etc.
+  // Version tree in version_node handles versioning of this data's structure
+  CrdtData data = 4;
+
+  // Complete version tree for conflict-free merging of document changes
+  // Contains detailed versioning information for every field/element in the document
+  // Used during synchronization to resolve conflicts and merge changes from multiple devices
+  VersionNode version_node = 5;
+
+  // Tombstone flag indicating document has been deleted
+  // Deleted documents are kept for synchronization purposes to handle conflicts
+  // between deletion and concurrent modifications on different devices
+  bool deleted = 6;
+
+  // Map of actor id -> latest local monotonic version applied by that device
+  // Duplicated from Actors message for complete synchronization payload
+  // Enables fast sync decisions and maintains actor version state
+  // Key: Actor ID (unique device identifier)
+  // Value: Highest version number applied by that actor to this document
+  map<int64, int64> version_vector = 7;
+
+  // Schema version for backward compatibility during document evolution
+  // Allows handling of documents created with different application versions
+  int32 schema_version = 8;
+}

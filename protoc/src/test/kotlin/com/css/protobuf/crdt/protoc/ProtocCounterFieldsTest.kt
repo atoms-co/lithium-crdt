@@ -143,7 +143,7 @@ class ProtocCounterFieldsTest {
             localNode = delta1.mergeResult.node,
             localActors = delta1.actors,
             incomingValue = delta2.mergeResult.value,
-            incomingNode = delta2.mergeResult.node!!,
+            incomingNode = requireNotNull(delta2.mergeResult.node),
             incomingVersionVector = delta2.actors.versionVectorMap,
         )
         val result3 = delta3.mergeResult
@@ -190,7 +190,7 @@ class ProtocCounterFieldsTest {
             localNode = delta1.mergeResult.node,
             localActors = delta1.actors,
             incomingValue = delta2.mergeResult.value,
-            incomingNode = delta2.mergeResult.node!!,
+            incomingNode = requireNotNull(delta2.mergeResult.node),
             incomingVersionVector = delta2.actors.versionVectorMap,
         )
         val mergedAll = resolver.resolveConflict(
@@ -198,7 +198,7 @@ class ProtocCounterFieldsTest {
             localNode = merged12.mergeResult.node,
             localActors = merged12.actors,
             incomingValue = delta3.mergeResult.value,
-            incomingNode = delta3.mergeResult.node!!,
+            incomingNode = requireNotNull(delta3.mergeResult.node),
             incomingVersionVector = delta3.actors.versionVectorMap,
         )
         val result = mergedAll.mergeResult
@@ -301,7 +301,7 @@ class ProtocCounterFieldsTest {
             localNode = delta1.mergeResult.node,
             localActors = delta1.actors,
             incomingValue = delta2.mergeResult.value,
-            incomingNode = delta2.mergeResult.node!!,
+            incomingNode = requireNotNull(delta2.mergeResult.node),
             incomingVersionVector = delta2.actors.versionVectorMap,
         )
         val result3 = delta3.mergeResult
@@ -440,7 +440,7 @@ class ProtocCounterFieldsTest {
             localNode = delta1.mergeResult.node,
             localActors = delta1.actors,
             incomingValue = delta2.mergeResult.value,
-            incomingNode = delta2.mergeResult.node!!,
+            incomingNode = requireNotNull(delta2.mergeResult.node),
             incomingVersionVector = delta2.actors.versionVectorMap,
         )
         val result3 = delta3.mergeResult
@@ -493,7 +493,7 @@ class ProtocCounterFieldsTest {
             localNode = delta1.mergeResult.node,
             localActors = delta1.actors,
             incomingValue = delta2.mergeResult.value,
-            incomingNode = delta2.mergeResult.node!!,
+            incomingNode = requireNotNull(delta2.mergeResult.node),
             incomingVersionVector = delta2.actors.versionVectorMap,
         )
         val result3 = delta3.mergeResult

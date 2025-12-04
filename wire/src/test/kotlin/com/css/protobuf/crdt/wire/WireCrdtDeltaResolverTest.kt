@@ -7,6 +7,7 @@ import com.css.protobuf.crdt.data.PathComponent
 import com.css.protobuf.crdt.data.Version
 import com.google.common.truth.Truth.assertThat
 import kotlin.test.Test
+import kotlin.test.assertNotNull
 
 /**
  * Tests for CrdtMessageDeltaResolver - delta/changes tracking.
@@ -195,13 +196,16 @@ class WireCrdtDeltaResolverTest {
             timestamp = 2, // Higher timestamp
         )
 
+        val incomingNode = incomingDelta.mergeResult.node
+        assertNotNull(incomingNode)
+
         // When - resolve conflict
         val delta = resolver.resolveConflict(
             localValue = local,
-            localNode = localDelta.mergeResult.node!!,
+            localNode = localDelta.mergeResult.node,
             localActors = localDelta.actors,
             incomingValue = incoming,
-            incomingNode = incomingDelta.mergeResult.node!!,
+            incomingNode = incomingNode,
             incomingVersionVector = mapOf(),
         )
 
@@ -303,9 +307,10 @@ class WireCrdtDeltaResolverTest {
         assertThat(delta2.changes.size).isEqualTo(1)
         assertThat(delta2.changes[0].value).isEqualTo("updated")
         val encoded2 = delta2.changes[0].encoded()
+        assertNotNull(encoded2)
         assertThat(encoded2).isNotNull()
         // Verify the encoded bytes represent the string value
-        assertThat(String(encoded2!!)).isEqualTo("updated")
+        assertThat(String(encoded2)).isEqualTo("updated")
     }
 
     @Test
@@ -489,11 +494,12 @@ class WireCrdtDeltaResolverTest {
         assertThat(delta.changes.size).isEqualTo(1)
         assertThat(delta.changes[0].value).isEqualTo(initial)
         val encoded = delta.changes[0].encoded()
+        assertNotNull(encoded)
         assertThat(encoded).isNotNull()
         assertThat(encoded).isEqualTo(TestMessage.ADAPTER.encode(initial))
 
         // Verify we can decode it back
-        val decoded = TestMessage.ADAPTER.decode(encoded!!)
+        val decoded = TestMessage.ADAPTER.decode(encoded)
         assertThat(decoded).isEqualTo(initial)
     }
 
@@ -590,13 +596,16 @@ class WireCrdtDeltaResolverTest {
             timestamp = 2,
         )
 
+        val incomingNode = deltaB.mergeResult.node
+        assertNotNull(incomingNode)
+
         // When - resolve conflict
         val conflict = resolver.resolveConflict(
             localValue = deltaA.mergeResult.value,
-            localNode = deltaA.mergeResult.node!!,
+            localNode = deltaA.mergeResult.node,
             localActors = null,
             incomingValue = deltaB.mergeResult.value,
-            incomingNode = deltaB.mergeResult.node!!,
+            incomingNode = incomingNode,
             incomingVersionVector = mapOf<Long, Long>(),
         )
 
@@ -657,13 +666,16 @@ class WireCrdtDeltaResolverTest {
             timestamp = 3,
         )
 
+        val incomingNode = deltaB.mergeResult.node
+        assertNotNull(incomingNode)
+
         // When - resolve conflict (using the full delta result with changes)
         val conflict = resolver.resolveConflict(
             localValue = deltaA.mergeResult.value,
-            localNode = deltaA.mergeResult.node!!,
+            localNode = deltaA.mergeResult.node,
             localActors = null,
             incomingValue = deltaB.mergeResult.value,
-            incomingNode = deltaB.mergeResult.node!!,
+            incomingNode = incomingNode,
             incomingVersionVector = mapOf<Long, Long>(),
         )
 

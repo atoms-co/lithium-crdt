@@ -247,7 +247,71 @@ sequenceDiagram
 
 **Without field-level versions**, the entire message would be compared, causing one device's changes to completely overwrite the other's. Field-level tracking merges both updates correctly.
 
-### 3. Resolution Strategy Taxonomy
+### 3. Version Semantics: minVersion and maxVersion
+
+The resolver uses two key version concepts for tree construction and conflict resolution:
+
+#### minVersion: The Sentinel for "Never Modified"
+
+`minVersion` is a sentinel value representing "no version" or "never modified." It's guaranteed to be less than any real version created by the system.
+
+**Use Cases:**
+
+1. **Default for null nodes**: When a node has no explicit version (`versionValue == null`), `minVersion` is used for comparison:
+   ```kotlin
+   val localVersion = localNode?.versionValue ?: minVersion
+   val incomingVersion = incomingNode.versionValue ?: minVersion
+   ```
+
+2. **Schema evolution**: New fields added to a message schema have no version until explicitly set. Using `minVersion` ensures any incoming version for that field will win.
+
+3. **Initial document state**: Before any writes, all fields effectively have `minVersion`, so the first write to any field will establish its version.
+
+#### maxVersion: Subtree Freshness for Message vs Null Resolution
+
+`maxVersion` recursively finds the highest version anywhere in a node's subtree. This is critical when resolving a message field against null (deletion).
+
+**The Rule:** When comparing a message against a deletion:
+- Compute `maxVersion` of the message's entire subtree
+- Compare against the deletion's version
+- If `maxVersion > deletion version`: Message wins (some child is newer than deletion)
+- If `deletion version > maxVersion`: Deletion wins (deletion is more recent than all children)
+
+```
+Example using Version{timestamp, actor_id, actor_version}:
+
+// Different devices modified different fields at different times
+customer {
+    name: "Alice"   @ Version{t=1000, actor=100, v=1}
+    email: "a@x.com" @ Version{t=1050, actor=200, v=1}  ← maxVersion (t=1050)
+    phone: "555"    @ Version{t=1020, actor=300, v=1}
+}
+maxVersion = Version{t=1050, actor=200, v=1} (highest timestamp among all children)
+
+Case 1: Incoming deletion @ Version{t=1060, actor=400, v=1}
+  t=1060 > t=1050 → Deletion wins → customer = null
+
+Case 2: Incoming deletion @ Version{t=1030, actor=400, v=1}
+  t=1050 > t=1030 → Message wins → customer preserved with all fields
+```
+
+#### minVersion for Message Node Construction
+
+When building a message's version node, the parent node's version is set to the `minVersion` across all child field versions. This represents "when this message structure was established":
+
+```kotlin
+// After processing all fields:
+val parentVersion = fieldVersions.values.minVersion(currentVersion)
+
+// Individual fields keep their specific versions in the fields map
+// Parent version = oldest modification that defines current shape
+```
+
+This differs from `maxVersion` (used for conflict resolution) because:
+- `minVersion` answers: "What's the oldest version defining this structure?"
+- `maxVersion` answers: "What's the newest modification anywhere in this subtree?"
+
+### 4. Resolution Strategy Taxonomy
 
 The `ResolutionStrategy` enum captures how conflicts were resolved:
 - **NO_CHANGE** - Values identical, no update needed
@@ -263,7 +327,7 @@ Strategies compose to track mixed resolutions across nested structures:
 
 This composition enables tracking whether a complex nested message resolution involved any actual merging or was purely one-sided.
 
-### 4. Local Write vs Incoming Resolution
+### 5. Local Write vs Incoming Resolution
 
 The module splits write operations into two distinct paths:
 
@@ -283,7 +347,120 @@ The module splits write operations into two distinct paths:
 
 This separation enables different optimization paths, clearer semantic boundaries, and type-safe return values appropriate to each operation's purpose.
 
-### 5. Map and Collection Strategies
+### 6. Delta Synchronization and Baseline Actors
+
+The library supports two synchronization modes: **full-state resolution** and **delta-based sync**. Delta sync is more efficient but requires baseline matching to ensure correctness.
+
+**Full-State Resolution (`resolveConflict`)**
+- Both replicas exchange complete document state and version trees
+- Handles arbitrary divergence—works regardless of message ordering or lost messages
+- Higher bandwidth cost but guaranteed correctness
+- Use when replicas may have diverged significantly
+
+**Delta-Based Sync (`changeDelta` + `applyChanges`)**
+- Sender computes minimal changes relative to receiver's known state
+- Transmits only the delta plus the baseline version vector
+- Much lower bandwidth for incremental updates
+- **Requires baseline matching** for correctness
+
+#### Why Baseline Matching is Required for Delta Sync
+
+Delta changes contain only leaf field values with their paths—they don't include full parent message context. The `applyChanges` method requires `incomingBaselineActors` to verify that the local state matches the baseline from which changes were computed. When baseline validation fails, `applyChanges` returns `null` to signal that the caller should fall back to full-state `resolveConflict`.
+
+```mermaid
+sequenceDiagram
+    participant S as Sender
+    participant R as Receiver
+
+    Note over S,R: Both at version vector {A:5, B:3}
+
+    S->>S: Local write: order.customer.name = "Bob"
+    Note over S: Version vector now {A:6, B:3}
+
+    S->>R: Delta: (baseline={A:5, B:3}, changes=[customer.name="Bob"@A:6])
+
+    alt Receiver state matches baseline
+        R->>R: Verify local vv >= {A:5, B:3} ✓
+        R->>R: Apply change to customer.name
+        Note over R: Version vector now {A:6, B:3}
+    else Receiver has diverged
+        R->>R: Verify local vv >= {A:5, B:3} ✗
+        R->>R: Reject delta, request full state
+        R->>S: Request full resolveConflict
+    end
+```
+
+**The maxVersion Problem with Nested Fields:**
+
+When resolving a message field against null, the resolver compares the `maxVersion` of the entire message subtree against the null's version. If the message's maxVersion is greater, the entire message (with all its children) wins. If the null's version is greater, the deletion wins.
+
+With delta sync, we might receive a change for a single child field that has a version newer than the null—but we're missing all the sibling data needed to reconstruct the complete message.
+
+**Example using Version{timestamp, actor_id, actor_version}:**
+
+Versions are compared lexicographically: first by `timestamp`, then by `actor_id` for tie-breaking. Different devices (actors) can modify different fields concurrently:
+
+```
+// Device A (actor_id=100) created the customer at t=1000
+// Device B (actor_id=200) updated email at t=1010
+// Device C (actor_id=300) updated phone at t=1005
+
+Baseline state: order {
+  customer {
+    name: "Alice"   @ Version{t=1000, actor=100, v=1}
+    email: "a@x.com" @ Version{t=1010, actor=200, v=1}  ← maxVersion (highest timestamp)
+    phone: "555"    @ Version{t=1005, actor=300, v=1}
+  }
+}
+
+// Device D (actor_id=400) deletes customer at t=1008
+Local state: order { customer: null @ Version{t=1008, actor=400, v=1} }
+
+// Device B (actor_id=200) updates name at t=1020 (doesn't know about deletion)
+Incoming delta: path=[customer, name], value="Bob" @ Version{t=1020, actor=200, v=2}
+```
+
+**In a full resolution:** The incoming message's maxVersion would be t=1020 (from the name field), which beats the null's t=1008. The message wins and we correctly preserve all children:
+```
+customer {
+  name: "Bob"       @ Version{t=1020, actor=200, v=2}
+  email: "a@x.com"  @ Version{t=1010, actor=200, v=1}
+  phone: "555"      @ Version{t=1005, actor=300, v=1}
+}
+```
+
+**With only the delta:** We only have the `name` field. If we apply it, we'd incorrectly create:
+```
+customer { name: "Bob" }  // email and phone are lost!
+```
+
+The delta doesn't tell us:
+- That sibling fields `email` and `phone` exist and should be preserved
+- What their values and versions are (from Device B and C)
+- Whether the incoming message as a whole should win against the null
+
+**With baseline validation:**
+- `incomingBaselineActors` reveals the sender's knowledge at change time
+- If baseline doesn't include our deletion (local has diverged), we detect the mismatch
+- We reject the delta and fall back to `resolveConflict`
+- Full resolution has both complete states with all child data to merge correctly
+
+**Divergence Consequences:**
+- **Lost updates**: Local changes after baseline get silently overwritten
+- **Orphaned nested changes**: Changes to children of deleted parents can't apply
+- **Duplicate application**: Already-incorporated changes reapplied incorrectly
+- **Inconsistent state**: Merge assumes a starting point that doesn't exist
+
+**When to Use Each Mode:**
+
+| Scenario | Recommended Mode |
+|----------|------------------|
+| Initial sync / reconnection after partition | Full-state (`resolveConflict`) |
+| Real-time incremental updates | Delta (`applyChanges`) with fallback |
+| Unknown divergence possible | Full-state (`resolveConflict`) |
+| Guaranteed in-order delivery | Delta (`applyChanges`) |
+
+### 7. Map and Collection Strategies
 
 **Map Resolver** (per-key version tracking)
 - Maps track versions at both map level and per-key level
@@ -318,6 +495,125 @@ This separation enables different optimization paths, clearer semantic boundarie
 - No element-level version tracking
 - Suitable for small, frequently rewritten collections where element identity doesn't matter
 
+### 8. Network Transmission: Encoding, Decoding, and Async Dispatch
+
+The library provides a `ChangeEvent` abstraction optimized for efficient network transmission with lazy encoding and actor-based filtering.
+
+#### Lazy Encoding Pattern
+
+When local operations produce changes, they return `ChangeEvent` objects with:
+- **Typed `value`**: The actual field value for inspection/logging
+- **`encoded()` function**: Lazily serializes the value to bytes
+
+```kotlin
+// Local write returns typed ChangeEvents
+val result = resolver.applyLocalWrite(current, node, actors, newValue, timestamp)
+
+// Encoding is deferred - value is still typed here
+result.changes.forEach { change ->
+    println("Changed field: ${change.pathComponents}, value: ${change.value}")
+}
+
+// Serialize on background thread when dispatching to transport
+backgroundScope.launch {
+    val serializedChanges = result.changes.map { change ->
+        SerializedChange(
+            path = change.pathComponents.map { it.encode() },
+            data = change.encoded(),  // Serialization happens here
+            version = change.versionNode.encode()
+        )
+    }
+    transport.send(baselineActors = actors.versionVector, changes = serializedChanges)
+}
+```
+
+This pattern enables:
+- **Non-blocking UI**: Serialization happens off the main thread
+- **Inspection before send**: Log or filter changes while still typed
+- **Conditional serialization**: Skip encoding if change will be filtered out
+
+#### Decoding with Path-Based Adapter Selection
+
+On the receiving side, `decodeChange()` navigates the path components to find the correct field-specific decoder:
+
+```kotlin
+// Receiver gets serialized changes from transport
+val serializedChanges: List<SerializedChange> = transport.receive()
+
+// Decode each change - the resolver navigates the path to find the right decoder
+val changes = serializedChanges.map { serialized ->
+    resolver.decodeChange(
+        encodedValue = serialized.data,
+        pathComponents = serialized.path.map { PathComponent.decode(it) },
+        versionNode = VersionNode.decode(serialized.version)
+    )
+}
+
+// Apply the decoded changes - returns null if baseline doesn't match
+val result = resolver.applyChanges(localValue, localNode, localActors, changes, incomingBaseline)
+if (result == null) {
+    // Baseline mismatch - fall back to full-state resolution
+    requestFullStateFromSender()
+}
+```
+
+The decoder hierarchy handles different field types:
+- **MessageChangeDecoder**: Navigates by field number to child decoders
+- **MapChangeDecoder**: Navigates by map key to value decoder
+- **RepeatedChangeDecoder**: Navigates by list index
+- **SingleValueChangeDecoder**: Decodes leaf primitive values
+
+#### Actor-Based Pre-Filtering
+
+Before decoding, receivers can use version information to skip unnecessary work:
+
+```kotlin
+val serializedChanges = transport.receive()
+
+// Filter by actor version BEFORE decoding
+val newChanges = serializedChanges.filter { serialized ->
+    val version = VersionNode.decode(serialized.version)
+    val actorId = version.actorId
+    val actorVersion = version.actorVersion
+
+    // Only decode if we don't already have this version
+    (localActors.versionVector[actorId] ?: 0L) < actorVersion
+}
+
+// Now decode only the changes we actually need
+val changes = newChanges.map { serialized ->
+    resolver.decodeChange(serialized.data, serialized.path, serialized.version)
+}
+```
+
+This is particularly valuable when:
+- Receiving batched updates that may include already-seen changes
+- Network retries that resend previously received changes
+- Broadcast scenarios where not all changes are relevant
+
+#### Complete Async Flow
+
+```mermaid
+sequenceDiagram
+    participant UI as UI Thread
+    participant BG as Background Thread
+    participant Net as Network
+
+    Note over UI: User edits document
+    UI->>UI: resolver.applyLocalWrite()
+    Note over UI: Returns ChangeEvents with typed values
+
+    UI->>BG: Dispatch changes async
+    BG->>BG: changes.map { it.encoded() }
+    Note over BG: Serialization on background thread
+    BG->>Net: transport.send(baseline, serializedChanges)
+
+    Net-->>BG: Receive serializedChanges
+    BG->>BG: Filter by actor version
+    BG->>BG: resolver.decodeChange() for each
+    BG->>BG: resolver.applyChanges()
+    BG->>UI: Notify UI of updates
+```
 
 ---
 

@@ -15,6 +15,46 @@ package com.css.protobuf.crdt.resolver.version
  * @param V The version type (e.g., Version for vector clocks, Long for Lamport timestamps)
  */
 interface VersionResolver<V> : Comparator<V> {
+    /**
+     * The minimum possible version value, used as a default when no version exists.
+     *
+     * This sentinel value represents "no version" or "never modified" and is guaranteed to be
+     * less than any real version created by the system. It serves several critical purposes:
+     *
+     * ## Default for Missing Nodes
+     *
+     * When a node or field has no explicit version (null `versionValue`), `minVersion` is used
+     * as the effective version for comparison. This ensures:
+     * - Any real incoming version will win against an unversioned field
+     * - Conflict resolution has a consistent baseline for comparisons
+     * - New fields added by schema evolution are treated as "oldest" until explicitly set
+     *
+     * ```kotlin
+     * // When resolving conflicts, null versions become minVersion
+     * val localVersion = localNode?.versionValue ?: minVersion
+     * val incomingVersion = incomingNode.versionValue ?: minVersion
+     * ```
+     *
+     * ## Version Tree Aggregation
+     *
+     * When computing `maxVersion` or `minVersion` across a subtree, nodes without explicit
+     * versions use `minVersion` as their contribution:
+     *
+     * ```kotlin
+     * // maxVersion traverses the tree, using minVersion for unversioned nodes
+     * fun N?.maxVersion(defaultVersion: V): V {
+     *     this ?: return defaultVersion
+     *     return fields.values.maxVersion(versionValue ?: defaultVersion)
+     * }
+     * ```
+     *
+     * ## Typical Implementation
+     *
+     * For timestamp-based versions: `Version(timestamp = 0, actorId = 0, actorVersion = 0)`
+     * For Lamport timestamps: `0L`
+     *
+     * The key invariant is: `minVersion < anyRealVersion` for all versions created by the system.
+     */
     val minVersion: V
 
     /**

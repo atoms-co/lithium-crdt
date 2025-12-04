@@ -274,7 +274,8 @@ class RepeatedCrdtLocalResolverTest {
         assertEquals(newVersion, result.node?.version, "Should set list version")
         assertEquals(4, result.node?.repeated?.size, "Should track max size")
 
-        val entries = result.node?.repeated!!
+        val entries = result.node?.repeated
+        assertNotNull(entries)
         assertEquals(currentVersion, entries[0].version, "Should preserve unchanged element") // "keep"
         assertEquals(newVersion, entries[1].version, "Should update modified element") // "modify_new"
         assertEquals(newVersion, entries[2].version, "Should set removal version") // "remove" -> tombstone

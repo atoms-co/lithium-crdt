@@ -244,12 +244,14 @@ class ProtoCrdtDeltaResolverTest {
         )
 
         // When - resolve conflict
+        val localNode = requireNotNull(localDelta.mergeResult.node)
+        val incomingNode = requireNotNull(incomingDelta.mergeResult.node)
         val delta = resolver.resolveConflict(
             localValue = local,
-            localNode = localDelta.mergeResult.node,
+            localNode = localNode,
             localActors = localDelta.actors,
             incomingValue = incoming,
-            incomingNode = incomingDelta.mergeResult.node!!,
+            incomingNode = incomingNode,
             incomingVersionVector = incomingDelta.actors.versionVectorMap,
         )
 
@@ -630,7 +632,8 @@ class ProtoCrdtDeltaResolverTest {
         assertThat(delta.mergeResult.resolution).isTrue() // Boolean for applyLocalWrite
         assertThat(delta.mergeResult.value).isEqualTo(initial)
         assertThat(delta.mergeResult.node).isNotNull()
-        assertThat(delta.mergeResult.node!!.version).isEqualTo(
+        val node = requireNotNull(delta.mergeResult.node)
+        assertThat(node.version).isEqualTo(
             Version.newBuilder().setTimestamp(1).setActorId(delta.actors.localActor).setActorVersion(1).build()
         )
     }
@@ -703,12 +706,14 @@ class ProtoCrdtDeltaResolverTest {
         )
 
         // When - resolve conflict
+        val localNode = requireNotNull(deltaA.mergeResult.node)
+        val incomingNode = requireNotNull(deltaB.mergeResult.node)
         val conflict = resolver.resolveConflict(
             localValue = deltaA.mergeResult.value,
-            localNode = deltaA.mergeResult.node,
+            localNode = localNode,
             localActors = deltaA.actors,
             incomingValue = deltaB.mergeResult.value,
-            incomingNode = deltaB.mergeResult.node!!,
+            incomingNode = incomingNode,
             incomingVersionVector = deltaB.actors.versionVectorMap,
         )
 
@@ -776,12 +781,14 @@ class ProtoCrdtDeltaResolverTest {
         )
 
         // When - resolve conflict (using the full delta result with changes)
+        val localNode = requireNotNull(deltaA.mergeResult.node)
+        val incomingNode = requireNotNull(deltaB.mergeResult.node)
         val conflict = resolver.resolveConflict(
             localValue = deltaA.mergeResult.value,
-            localNode = deltaA.mergeResult.node,
+            localNode = localNode,
             localActors = deltaA.actors,
             incomingValue = deltaB.mergeResult.value,
-            incomingNode = deltaB.mergeResult.node!!,
+            incomingNode = incomingNode,
             incomingVersionVector = deltaB.actors.versionVectorMap,
         )
 

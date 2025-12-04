@@ -6,7 +6,7 @@ import com.css.protobuf.crdt.data.PathComponent
 import com.css.protobuf.crdt.data.Version
 import com.css.protobuf.crdt.data.VersionNode
 import com.css.protobuf.crdt.resolver.NodeMergeChangeProvider
-import com.css.protobuf.crdt.resolver.version.ResolutionStrategy
+import com.css.protobuf.crdt.resolver.version.ApplyChangesResult
 import com.google.common.truth.Truth.assertThat
 import java.nio.ByteBuffer
 import org.junit.jupiter.api.Test
@@ -60,8 +60,8 @@ class ProtocMessageResolverApplyChangesTest {
                 incomingBaselineActors = mapOf(),
             )
 
-        // Then - no change
-        assertThat(result.mergeResult.resolution).isEqualTo(ResolutionStrategy.NO_CHANGE)
+        // Then - no change (ApplyChangesResult.UNCHANGED means local state is kept)
+        assertThat(result.mergeResult.resolution).isEqualTo(ApplyChangesResult.UNCHANGED)
         assertThat(result.mergeResult.value).isEqualTo(localValue)
         assertThat(result.mergeResult.node).isEqualTo(localNode)
         assertThat(result.actors).isEqualTo(localActors)
@@ -120,7 +120,7 @@ class ProtocMessageResolverApplyChangesTest {
             )
 
         // Then - no change because local is already ahead (version 10 > version 6)
-        assertThat(result.mergeResult.resolution).isEqualTo(ResolutionStrategy.NO_CHANGE)
+        assertThat(result.mergeResult.resolution).isEqualTo(ApplyChangesResult.UNCHANGED)
         assertThat(result.mergeResult.value).isEqualTo(localValue)
         assertThat(result.mergeResult.node).isEqualTo(localNode)
     }
@@ -175,7 +175,7 @@ class ProtocMessageResolverApplyChangesTest {
             )
 
         // Then - no change because we already have version 10 which includes version 8
-        assertThat(result.mergeResult.resolution).isEqualTo(ResolutionStrategy.NO_CHANGE)
+        assertThat(result.mergeResult.resolution).isEqualTo(ApplyChangesResult.UNCHANGED)
         assertThat(result.mergeResult.value).isEqualTo(localValue)
         assertThat(result.actors.versionVectorMap).isEqualTo(localActors.versionVectorMap)
     }

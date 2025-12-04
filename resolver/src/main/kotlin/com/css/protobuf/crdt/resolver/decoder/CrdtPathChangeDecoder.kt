@@ -4,13 +4,13 @@ import com.css.protobuf.crdt.resolver.ChangeEvent
 import com.css.protobuf.crdt.resolver.version.VersionTreeResolver
 
 /**
- * Base interface for decoders that reconstruct ChangeEvent instances from wire format.
+ * Base interface for decoders that reconstruct ChangeEvent instances from serialized format.
  *
- * This is the reverse operation of encoding changes for transmission over the wire.
+ * This is the reverse operation of encoding changes for network transmission.
  * Given path components, encoded bytes, and version information, decoders navigate through
  * the data structure to reconstruct the change.
  *
- * ## Wire Format
+ * ## Serialized Format
  *
  * Changes are transmitted as:
  * - **pathComponents**: List of path components describing the field path
@@ -45,7 +45,7 @@ interface CrdtPathChangeDecoder<T, N, V, C> {
     val versionTreeResolver: VersionTreeResolver<N, V, C>
 
     /**
-     * Decodes a change from its wire representation back into a ChangeEvent.
+     * Decodes a change from its serialized representation back into a ChangeEvent.
      *
      * @param encodedValue The encoded value as bytes (null for deletions)
      * @param pathComponents Remaining path components to navigate (empty if at target)

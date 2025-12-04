@@ -6,7 +6,7 @@ import com.css.protobuf.crdt.data.PathComponent
 import com.css.protobuf.crdt.data.Version
 import com.css.protobuf.crdt.data.VersionNode
 import com.css.protobuf.crdt.resolver.NodeMergeChangeProvider
-import com.css.protobuf.crdt.resolver.version.ResolutionStrategy
+import com.css.protobuf.crdt.resolver.version.ApplyChangesResult
 import com.google.common.truth.Truth.assertThat
 import java.nio.ByteBuffer
 import kotlin.test.Test
@@ -45,7 +45,7 @@ class WireMessageResolverApplyChangesTest {
             )
 
         // Then - no change
-        assertThat(result.mergeResult.resolution).isEqualTo(ResolutionStrategy.NO_CHANGE)
+        assertThat(result.mergeResult.resolution).isEqualTo(ApplyChangesResult.UNCHANGED)
         assertThat(result.mergeResult.value).isEqualTo(localValue)
         assertThat(result.mergeResult.node).isEqualTo(localNode)
         assertThat(result.actors).isEqualTo(localActors)
@@ -86,7 +86,7 @@ class WireMessageResolverApplyChangesTest {
             )
 
         // Then - no change because local is already ahead (version 10 > version 6)
-        assertThat(result.mergeResult.resolution).isEqualTo(ResolutionStrategy.NO_CHANGE)
+        assertThat(result.mergeResult.resolution).isEqualTo(ApplyChangesResult.UNCHANGED)
         assertThat(result.mergeResult.value).isEqualTo(localValue)
         assertThat(result.mergeResult.node).isEqualTo(localNode)
     }
@@ -123,7 +123,7 @@ class WireMessageResolverApplyChangesTest {
             )
 
         // Then - no change because we already have version 10 which includes version 8
-        assertThat(result.mergeResult.resolution).isEqualTo(ResolutionStrategy.NO_CHANGE)
+        assertThat(result.mergeResult.resolution).isEqualTo(ApplyChangesResult.UNCHANGED)
         assertThat(result.mergeResult.value).isEqualTo(localValue)
         assertThat(result.actors.version_vector).isEqualTo(localActors.version_vector)
     }

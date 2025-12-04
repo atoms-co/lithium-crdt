@@ -153,7 +153,9 @@ internal class ProtoMessageFieldDescriptor(internal val fieldDescriptor: FieldDe
             LONG -> ProtoValueDecoders.LONG_DECODER
             STRING -> ProtoValueDecoders.STRING_DECODER
             BYTE_STRING -> ProtoValueDecoders.BYTE_STRING_DECODER
-            ENUM -> ProtoValueDecoders.enumDecoder(enumValueDescriptor!!)
+            ENUM -> ProtoValueDecoders.enumDecoder(
+                enumDescriptor = enumValueDescriptor ?: error("No enum valueDescriptor")
+            )
             MESSAGE ->
                 ProtoValueDecoders.messageDecoder(
                     DynamicMessage.getDefaultInstance(valueDescriptor.messageType).parserForType
@@ -388,10 +390,10 @@ internal class ProtoMessageFieldDescriptor(internal val fieldDescriptor: FieldDe
                                 FLOAT -> input.readFloat()
                                 DOUBLE -> input.readDouble()
                                 BOOLEAN -> input.readBool()
-                                ENUM -> enumValueDescriptor!!.findValueByNumber(input.readEnum())
-                                else -> error("Unsupported packed type")
+                                ENUM -> enumValueDescriptor?.findValueByNumber(input.readEnum())
+                                else -> null
                             }
-                            list.add(item)
+                            list.add(item ?: error("Unsupported packed type"))
                         }
                         input.popLimit(oldLimit)
                     } else {
@@ -412,7 +414,8 @@ internal class ProtoMessageFieldDescriptor(internal val fieldDescriptor: FieldDe
                                     input.readBytes()
                                 }
 
-                                ENUM -> enumValueDescriptor!!.findValueByNumber(input.readEnum())
+                                ENUM -> enumValueDescriptor?.findValueByNumber(input.readEnum())
+                                    ?: error("Unsupported enum type")
                                 MESSAGE -> {
                                     val length = input.readUInt32()
                                     val oldLimit = input.pushLimit(length)

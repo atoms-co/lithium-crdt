@@ -1,15 +1,7 @@
-// CRDT Version Tree Storage Schema
+// CRDT Version Change
 //
-// This schema provides efficient, flexible versioning for CRDT (Conflict-free Replicated Data Type)
-// systems. It separates version information from data content using a tree structure that mirrors
-// the data hierarchy, optimized for minimal storage overhead and maximum performance.
-//
-// Key Features:
-// - Context-dependent version semantics (single version field serves multiple purposes)
-// - Tree structure mirrors protobuf data for efficient traversal
-// - Schema-agnostic design works with any protobuf message type
-// - Optimized for space efficiency through version inheritance and leaf node elimination
-// - Automatic version consistency (derived container versions cannot become stale)
+// Combines path navigation with version information to specify exactly where
+// and with what version a change should be applied in a CRDT document.
 
 syntax = "proto3";
 
@@ -20,8 +12,75 @@ option java_multiple_files = true;
 import "com/css/protobuf/crdt/data/path_component.proto";
 import "com/css/protobuf/crdt/data/version_node.proto";
 
+/*
+ * Specifies a version update at a specific location in the document structure.
+ *
+ * VersionChange combines path navigation with version metadata, enabling precise
+ * specification of where a change applies and what version information should be
+ * used for conflict resolution. This is the core building block for delta-based
+ * synchronization, allowing individual field changes to be transmitted and applied
+ * incrementally.
+ *
+ * COMPONENTS:
+ * - node: The VersionNode containing version metadata for the change. This includes
+ *   the timestamp, actor ID, and actor version used for LWW conflict resolution.
+ *
+ * - path: An ordered sequence of PathComponents navigating from the document root
+ *   to the target location. Each component represents one navigation step.
+ *
+ * CONFLICT RESOLUTION:
+ * When applying a VersionChange, the receiving device compares the node's version
+ * against the existing version at the target path:
+ * - If node.version > existing.version: Change wins, update the document
+ * - If node.version < existing.version: Change loses, ignore the update
+ * - If node.version == existing.version: Tie-break by actor_id (deterministic)
+ *
+ * USAGE IN DELTA SYNC:
+ * VersionChange is typically paired with data in a DataChange message:
+ * 1. DataChange.version_change specifies WHERE and WHEN (path + version)
+ * 2. DataChange.data specifies WHAT (the actual value bytes)
+ *
+ * EXAMPLE SCENARIOS:
+ *
+ * Example 1: Update a primitive field
+ *   Target: user.email (field 2)
+ *   VersionChange {
+ *     node: VersionNode { version: { timestamp: 1000, actor_id: 1, actor_version: 5 } }
+ *     path: [PathComponent { field_number: 2 }]
+ *   }
+ *
+ * Example 2: Update a map entry
+ *   Target: order.items["SKU123"].quantity (field 5 → key "SKU123" → field 1)
+ *   VersionChange {
+ *     node: VersionNode { version: { timestamp: 2000, actor_id: 2, actor_version: 3 } }
+ *     path: [
+ *       PathComponent { field_number: 5 },
+ *       PathComponent { string_key: "SKU123" },
+ *       PathComponent { field_number: 1 }
+ *     ]
+ *   }
+ *
+ * Example 3: Delete a field (tombstone)
+ *   Target: user.phone (field 4) - set to empty/default value
+ *   VersionChange {
+ *     node: VersionNode { version: { timestamp: 3000, actor_id: 1, actor_version: 8 } }
+ *     path: [PathComponent { field_number: 4 }]
+ *   }
+ *   // DataChange.data would be empty bytes to indicate deletion
+ *
+ * @see PathComponent for path navigation details
+ * @see VersionNode for version metadata structure
+ * @see DataChange for combining version changes with data
+ */
 message VersionChange {
-  VersionNode node = 1;            // The version node being applied
-  repeated PathComponent path = 2; // Ordered sequence of path components from root to target location
+  // The version node to apply at the target location.
+  // Contains the version triple (timestamp, actor_id, actor_version) used for
+  // LWW conflict resolution, plus any child version information for nested types.
+  VersionNode node = 1;
+
+  // Ordered sequence of path components from document root to target location.
+  // An empty path targets the root document itself.
+  // Each component navigates one level deeper into the document structure.
+  repeated PathComponent path = 2;
 }
 

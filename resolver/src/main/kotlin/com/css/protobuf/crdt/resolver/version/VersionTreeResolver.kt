@@ -116,8 +116,23 @@ interface VersionTreeResolver<N, V, C> : VersionNodeAdapter<N, V>, VersionResolv
      * smallest version found. If a node has no version, the default version is
      * used for that node. If the collection is null or empty, returns the default.
      *
-     * **Use Case:** Determining the oldest data in a set of updates to ensure
-     * all nodes have progressed beyond a certain point.
+     * ## Use Case: Message Node Version Assignment
+     *
+     * When creating or updating a message's version node, we use `minVersion` across
+     * all child field versions to determine the parent node's version. This is because
+     * the parent version represents "when this message structure was established"—
+     * the oldest modification that defines the current shape.
+     *
+     * ```kotlin
+     * // After processing all fields during a local write:
+     * val version = fieldVersions.values.minVersion(currentVersion)
+     *
+     * // The message node gets the minimum version, while individual fields
+     * // retain their specific (potentially higher) versions in the fields map
+     * ```
+     *
+     * This differs from `maxVersion`, which finds the most recent modification
+     * anywhere in the subtree for conflict resolution against deletions.
      *
      * @param defaultVersion The version to use for nodes without versions or if collection is null/empty
      * @return The minimum version found in the collection, or defaultVersion
@@ -132,14 +147,45 @@ interface VersionTreeResolver<N, V, C> : VersionNodeAdapter<N, V>, VersionResolv
      * Finds the maximum version in a node and its descendant fields.
      *
      * This function recursively traverses a node's field structure to find the
-     * most recent version anywhere in the subtree. This is useful for determining
-     * the overall staleness/freshness of a complex data structure.
+     * most recent version anywhere in the subtree. This is critical for conflict
+     * resolution when comparing a message against null (deletion).
      *
-     * **Algorithm:**
-     * 1. If node is null, return defaultVersion
+     * ## Why maxVersion Matters for Message vs Null Resolution
+     *
+     * When resolving a message field against a null/deletion, the resolver compares:
+     * - The message's `maxVersion` (highest version in entire subtree)
+     * - The null's version (when the deletion occurred)
+     *
+     * If maxVersion > null's version: The message wins (some child was modified after deletion)
+     * If null's version > maxVersion: The deletion wins (deletion is more recent than all children)
+     *
+     * ```kotlin
+     * // Example: message with children at different versions from different devices
+     * // Version{timestamp, actor_id, actor_version} - compared by timestamp first
+     * customer {
+     *     name: "Alice"   @ Version{t=1000, actor=100, v=1}
+     *     email: "a@x.com" @ Version{t=1050, actor=200, v=1}  // ← maxVersion (highest timestamp)
+     *     phone: "555"    @ Version{t=1020, actor=300, v=1}
+     * }
+     * // maxVersion = Version{t=1050, actor=200, v=1}
+     *
+     * // If incoming deletion is at Version{t=1060, actor=400, v=1}:
+     * // t=1060 > t=1050, so deletion wins → customer becomes null
+     *
+     * // If incoming deletion is at Version{t=1030, actor=400, v=1}:
+     * // t=1050 > t=1030, so message wins → customer preserved with all children
+     * ```
+     *
+     * ## Algorithm
+     *
+     * 1. If node is null, return defaultVersion (typically minVersion)
      * 2. Start with node's own version (or defaultVersion if absent)
      * 3. Recursively find max version across all field values
      * 4. Return the overall maximum
+     *
+     * **Note:** For repeated/map types, the node's `versionValue` already contains
+     * the max of children (computed during tree construction), so only message
+     * fields need recursive traversal.
      *
      * @param defaultVersion The version to use if node is null or has no version
      * @return The maximum version found in the node tree

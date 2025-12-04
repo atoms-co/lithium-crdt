@@ -5,8 +5,10 @@ import com.css.protobuf.crdt.resolver.delta.MessageDeltaResolver
 import com.css.protobuf.crdt.resolver.descriptor.MessageBuilder
 import com.css.protobuf.crdt.resolver.incoming.partial.MessageIncomingChangeResolver
 import com.css.protobuf.crdt.resolver.local.MessageLocalResolver
+import com.css.protobuf.crdt.resolver.version.ApplyChangesResult
 import com.css.protobuf.crdt.resolver.version.ResolutionStrategy
 import com.css.protobuf.crdt.resolver.version.resolutionStrategy
+import com.css.protobuf.crdt.resolver.version.toApplyChangesResult
 
 /**
  * Comprehensive CRDT resolver for message types with field-level conflict resolution.
@@ -177,7 +179,7 @@ interface MessageResolver<M, B, N, V, C, A> :
         localActors: A?,
         incomingChanges: List<ChangeEvent<*, N, C>>,
         incomingBaselineActors: Map<Long, Long>,
-    ): ResolverDeltaResult<M, N, V, ResolutionStrategy, C, A> = with(versionTreeResolver) {
+    ): ResolverDeltaResult<M, N, V, ApplyChangesResult, C, A> = with(versionTreeResolver) {
         val deltaResolution = (localActors?.versionVector ?: mapOf()).resolutionStrategy(incomingBaselineActors)
         val shouldApply = when (deltaResolution) {
             ResolutionStrategy.NO_CHANGE,
@@ -186,12 +188,14 @@ interface MessageResolver<M, B, N, V, C, A> :
             ResolutionStrategy.MERGED_VALUES -> false
         }
 
+        // Baseline mismatch: local state has diverged from the baseline these changes were computed against.
+        // Return REJECTED to signal the caller should fall back to full-state resolveConflict.
         if (!shouldApply) {
             return ResolverDeltaResult(
                 actors = merge(localActors, mapOf()),
                 changes = listOf(),
                 mergeResult = NodeMergeResult(
-                    resolution = ResolutionStrategy.LOCAL,
+                    resolution = ApplyChangesResult.REJECTED,
                     value = localValue,
                     node = localNode,
                 ),
@@ -206,7 +210,7 @@ interface MessageResolver<M, B, N, V, C, A> :
                 actors = localActors,
                 changes = listOf(),
                 mergeResult = NodeMergeResult(
-                    resolution = ResolutionStrategy.NO_CHANGE,
+                    resolution = ApplyChangesResult.UNCHANGED,
                     value = localValue,
                     node = localNode,
                 ),
@@ -225,7 +229,12 @@ interface MessageResolver<M, B, N, V, C, A> :
         return ResolverDeltaResult(
             actors = merged,
             changes = context.result,
-            mergeResult = result,
+            mergeResult = NodeMergeResult(
+                resolution = result.resolution.toApplyChangesResult(),
+                value = result.value,
+                node = result.node,
+            ),
         )
     }
 }
+

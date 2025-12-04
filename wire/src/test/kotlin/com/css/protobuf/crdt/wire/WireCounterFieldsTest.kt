@@ -444,17 +444,4 @@ class WireCounterFieldsTest {
         // Then - empty list created
         assertThat(result1.value?.counterListValue).isEmpty()
     }
-
-    // Helper extension function to simplify resolveConflict calls
-    private fun <T, S1, S2> WireCrdtMessageResolver<T>.resolveConflict(
-        lhs: ResolverDeltaResult<T, VersionNode, Version, S1, PathComponent, Actors>,
-        rhs: ResolverDeltaResult<T, VersionNode, Version, S2, PathComponent, Actors>,
-    ) = resolveConflict(
-        localValue = lhs.mergeResult.value,
-        localNode = lhs.mergeResult.node!!,
-        localActors = lhs.actors,
-        incomingValue = rhs.mergeResult.value,
-        incomingNode = rhs.mergeResult.node!!,
-        incomingVersionVector = rhs.actors.version_vector,
-    )
 }

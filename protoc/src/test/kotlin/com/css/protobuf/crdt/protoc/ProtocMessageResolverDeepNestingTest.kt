@@ -115,7 +115,7 @@ class ProtocMessageResolverDeepNestingTest {
         assertThat(repeatedMsg.intValue).isEqualTo(50) // Unchanged
         assertThat(repeatedMsg.nestedMessageMapMap).containsKey("key1")
 
-        val nestedInMap = repeatedMsg.nestedMessageMapMap["key1"]!!
+        val nestedInMap = requireNotNull(repeatedMsg.nestedMessageMapMap["key1"])
         assertThat(nestedInMap.intValue).isEqualTo(999) // Changed!
         assertThat(nestedInMap.stringValue).isEqualTo("original") // Unchanged
     }
@@ -209,13 +209,13 @@ class ProtocMessageResolverDeepNestingTest {
         assertThat(resultMessage.stringValue).isEqualTo("root-value") // Unchanged
         assertThat(resultMessage.nestedMapValueMap).containsKey("outer")
 
-        val outerNested = resultMessage.nestedMapValueMap["outer"]!!
+        val outerNested = requireNotNull(resultMessage.nestedMapValueMap["outer"])
         assertThat(outerNested.nestedRepeatedMessageList).hasSize(1)
 
         val repeatedMsg = outerNested.getNestedRepeatedMessage(0)
         assertThat(repeatedMsg.nestedMessageMapMap).containsKey("inner")
 
-        val innerNested = repeatedMsg.nestedMessageMapMap["inner"]!!
+        val innerNested = requireNotNull(repeatedMsg.nestedMessageMapMap["inner"])
         assertThat(innerNested.stringValue).isEqualTo("deep-modified") // Changed!
         assertThat(innerNested.intValue).isEqualTo(123) // Unchanged
     }
@@ -322,9 +322,9 @@ class ProtocMessageResolverDeepNestingTest {
 
         val repeatedMsg = resultMessage.nestedValue.getNestedRepeatedMessage(0)
         assertThat(repeatedMsg.intValue).isEqualTo(333) // Depth 3
-        assertThat(repeatedMsg.nestedMessageMapMap["key1"]!!.intValue).isEqualTo(444) // Depth 5
+        assertThat(requireNotNull(repeatedMsg.nestedMessageMapMap["key1"]).intValue).isEqualTo(444) // Depth 5
 
-        assertThat(resultMessage.nestedMapValueMap["mapKey1"]!!.intValue).isEqualTo(555) // Depth 3
+        assertThat(requireNotNull(resultMessage.nestedMapValueMap["mapKey1"]).intValue).isEqualTo(555) // Depth 3
     }
 
     @Test
@@ -442,7 +442,7 @@ class ProtocMessageResolverDeepNestingTest {
         val resultMessage = result.mergeResult.value as TestMessage
         assertThat(resultMessage.nestedValue.intValue).isEqualTo(111) // Local kept (depth 2)
 
-        val nestedInMap = resultMessage.nestedValue.getNestedRepeatedMessage(0).nestedMessageMapMap["key"]!!
+        val nestedInMap = requireNotNull(resultMessage.nestedValue.getNestedRepeatedMessage(0).nestedMessageMapMap["key"])
         assertThat(nestedInMap.intValue).isEqualTo(999) // Incoming applied (depth 5)
     }
 
@@ -532,8 +532,9 @@ class ProtocMessageResolverDeepNestingTest {
         val repeatedMsg = resultMessage.nestedValue.getNestedRepeatedMessage(0)
         assertThat(repeatedMsg.intValue).isEqualTo(50)
         assertThat(repeatedMsg.nestedMessageMapMap).containsKey("key1")
-        assertThat(repeatedMsg.nestedMessageMapMap["key1"]!!.intValue).isEqualTo(999)
-        assertThat(repeatedMsg.nestedMessageMapMap["key1"]!!.stringValue).isEqualTo("new")
+        val nestedKey1 = requireNotNull(repeatedMsg.nestedMessageMapMap["key1"])
+        assertThat(nestedKey1.intValue).isEqualTo(999)
+        assertThat(nestedKey1.stringValue).isEqualTo("new")
     }
 
     @Test
@@ -615,8 +616,9 @@ class ProtocMessageResolverDeepNestingTest {
 
         val repeatedMsg = resultMessage.nestedValue.getNestedRepeatedMessage(0)
         assertThat(repeatedMsg.nestedMessageMapMap).containsKey("key")
-        assertThat(repeatedMsg.nestedMessageMapMap["key"]!!.intValue).isEqualTo(123)
-        assertThat(repeatedMsg.nestedMessageMapMap["key"]!!.stringValue).isEqualTo("created")
+        val nestedKey = requireNotNull(repeatedMsg.nestedMessageMapMap["key"])
+        assertThat(nestedKey.intValue).isEqualTo(123)
+        assertThat(nestedKey.stringValue).isEqualTo("created")
     }
 
     @Test
@@ -722,12 +724,14 @@ class ProtocMessageResolverDeepNestingTest {
         assertThat(repeatedMsg.nestedMessageMapMap).containsKey("key2")
 
         // key1 modified
-        assertThat(repeatedMsg.nestedMessageMapMap["key1"]!!.intValue).isEqualTo(999)
-        assertThat(repeatedMsg.nestedMessageMapMap["key1"]!!.stringValue).isEqualTo("modified")
+        val key1 = requireNotNull(repeatedMsg.nestedMessageMapMap["key1"])
+        assertThat(key1.intValue).isEqualTo(999)
+        assertThat(key1.stringValue).isEqualTo("modified")
 
         // key2 unchanged
-        assertThat(repeatedMsg.nestedMessageMapMap["key2"]!!.intValue).isEqualTo(200)
-        assertThat(repeatedMsg.nestedMessageMapMap["key2"]!!.stringValue).isEqualTo("original2")
+        val key2 = requireNotNull(repeatedMsg.nestedMessageMapMap["key2"])
+        assertThat(key2.intValue).isEqualTo(200)
+        assertThat(key2.stringValue).isEqualTo("original2")
     }
 
     @Test
@@ -840,7 +844,7 @@ class ProtocMessageResolverDeepNestingTest {
 
         // Then - incoming should win (later timestamp)
         val resultMessage = result.mergeResult.value as TestMessage
-        val nestedInMap = resultMessage.nestedValue.getNestedRepeatedMessage(0).nestedMessageMapMap["key1"]!!
+        val nestedInMap = requireNotNull(resultMessage.nestedValue.getNestedRepeatedMessage(0).nestedMessageMapMap["key1"])
         assertThat(nestedInMap.intValue).isEqualTo(300) // Incoming wins
         assertThat(nestedInMap.stringValue).isEqualTo("base") // Unchanged
     }
@@ -937,9 +941,10 @@ class ProtocMessageResolverDeepNestingTest {
         assertThat(repeatedMsg.nestedMessageMapMap).hasSize(2)
         assertThat(repeatedMsg.nestedMessageMapMap).containsKey("key1")
         assertThat(repeatedMsg.nestedMessageMapMap).containsKey("key2")
-        assertThat(repeatedMsg.nestedMessageMapMap["key1"]!!.intValue).isEqualTo(100)
-        assertThat(repeatedMsg.nestedMessageMapMap["key2"]!!.intValue).isEqualTo(200)
-        assertThat(repeatedMsg.nestedMessageMapMap["key2"]!!.stringValue).isEqualTo("new")
+        assertThat(requireNotNull(repeatedMsg.nestedMessageMapMap["key1"]).intValue).isEqualTo(100)
+        val addedKey2 = requireNotNull(repeatedMsg.nestedMessageMapMap["key2"])
+        assertThat(addedKey2.intValue).isEqualTo(200)
+        assertThat(addedKey2.stringValue).isEqualTo("new")
     }
 
     @Test
@@ -1026,11 +1031,11 @@ class ProtocMessageResolverDeepNestingTest {
         assertThat(resultMessage.stringValue).isEqualTo("root")
         assertThat(resultMessage.int32KeyDeepMapMap).containsKey(42)
 
-        val deepMsg = resultMessage.int32KeyDeepMapMap[42]!!
+        val deepMsg = requireNotNull(resultMessage.int32KeyDeepMapMap[42])
         assertThat(deepMsg.intValue).isEqualTo(50) // Unchanged
         assertThat(deepMsg.nestedMessageMapMap).containsKey("key")
 
-        val nestedInMap = deepMsg.nestedMessageMapMap["key"]!!
+        val nestedInMap = requireNotNull(deepMsg.nestedMessageMapMap["key"])
         assertThat(nestedInMap.intValue).isEqualTo(999) // Changed via int32 key path
         assertThat(nestedInMap.stringValue).isEqualTo("original") // Unchanged
     }
@@ -1114,10 +1119,10 @@ class ProtocMessageResolverDeepNestingTest {
         val resultMessage = result.mergeResult.value as TestMessage
         assertThat(resultMessage.int64KeyDeepMapMap).containsKey(9999L)
 
-        val deepMsg = resultMessage.int64KeyDeepMapMap[9999L]!!
+        val deepMsg = requireNotNull(resultMessage.int64KeyDeepMapMap[9999L])
         assertThat(deepMsg.nestedMessageMapMap).containsKey("key")
 
-        val nestedInMap = deepMsg.nestedMessageMapMap["key"]!!
+        val nestedInMap = requireNotNull(deepMsg.nestedMessageMapMap["key"])
         assertThat(nestedInMap.intValue).isEqualTo(100) // Unchanged
         assertThat(nestedInMap.stringValue).isEqualTo("modified") // Changed via int64 key path
     }
@@ -1210,8 +1215,8 @@ class ProtocMessageResolverDeepNestingTest {
         val resultMessage = result.mergeResult.value as TestMessage
         assertThat(resultMessage.int32Value).isEqualTo(777) // Unchanged
 
-        val level2 = resultMessage.int32KeyDeepMapMap[42]!!
-        val level4 = level2.int32KeyMapMap[99]!!
+        val level2 = requireNotNull(resultMessage.int32KeyDeepMapMap[42])
+        val level4 = requireNotNull(level2.int32KeyMapMap[99])
         val level6 = level4.getNestedRepeatedMessage(0)
         assertThat(level6.intValue).isEqualTo(888) // Changed at depth 7
     }
@@ -1358,10 +1363,10 @@ class ProtocMessageResolverDeepNestingTest {
 
         // [0] should have local's change (100)
         val element0 = resultMessage.nestedValue.getNestedRepeatedMessage(0)
-        assertThat(element0.nestedMessageMapMap["key"]!!.intValue).isEqualTo(100)
+        assertThat(requireNotNull(element0.nestedMessageMapMap["key"]).intValue).isEqualTo(100)
 
         // [1] should have incoming's change (300)
         val element1 = resultMessage.nestedValue.getNestedRepeatedMessage(1)
-        assertThat(element1.nestedMessageMapMap["key"]!!.intValue).isEqualTo(300)
+        assertThat(requireNotNull(element1.nestedMessageMapMap["key"]).intValue).isEqualTo(300)
     }
 }

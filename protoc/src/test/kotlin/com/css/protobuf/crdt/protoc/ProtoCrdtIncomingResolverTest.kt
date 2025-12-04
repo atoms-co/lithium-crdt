@@ -78,7 +78,7 @@ class ProtoCrdtIncomingResolverTest {
             localNode = result2.node,
             localActors = delta2.actors,
             incomingValue = result3.value,
-            incomingNode = result3.node!!,
+            incomingNode = requireNotNull(result3.node),
             incomingVersionVector = delta3.actors.versionVectorMap,
         )
         val conflict = conflictDelta.mergeResult
@@ -98,7 +98,7 @@ class ProtoCrdtIncomingResolverTest {
             localNode = conflict.node,
             localActors = conflictDelta.actors,
             incomingValue = conflict.value,
-            incomingNode = conflict.node!!,
+            incomingNode = requireNotNull(conflict.node),
             incomingVersionVector = conflictDelta.actors.versionVectorMap,
         )
         val conflict2 = conflict2Delta.mergeResult
@@ -183,7 +183,7 @@ class ProtoCrdtIncomingResolverTest {
             localNode = resultA.node,
             localActors = deltaA.actors,
             incomingValue = resultB.value,
-            incomingNode = resultB.node!!,
+            incomingNode = requireNotNull(resultB.node),
             incomingVersionVector = deltaB.actors.versionVectorMap,
         )
         val conflict = conflictDelta.mergeResult
@@ -243,7 +243,7 @@ class ProtoCrdtIncomingResolverTest {
             localNode = resultA.node,
             localActors = deltaA.actors,
             incomingValue = resultB.value,
-            incomingNode = resultB.node!!,
+            incomingNode = requireNotNull(resultB.node),
             incomingVersionVector = deltaB.actors.versionVectorMap,
         )
         val conflict = conflictDelta.mergeResult
@@ -313,7 +313,7 @@ class ProtoCrdtIncomingResolverTest {
             localNode = result2.node,
             localActors = delta2.actors,
             incomingValue = result3.value,
-            incomingNode = result3.node!!,
+            incomingNode = requireNotNull(result3.node),
             incomingVersionVector = delta3.actors.versionVectorMap,
         )
         val conflict = conflictDelta.mergeResult
@@ -349,7 +349,7 @@ class ProtoCrdtIncomingResolverTest {
             localNode = result.node,
             localActors = delta.actors,
             incomingValue = result.value,
-            incomingNode = result.node!!,
+            incomingNode = requireNotNull(result.node),
             incomingVersionVector = delta.actors.versionVectorMap,
         )
         val conflict = conflictDelta.mergeResult
@@ -417,7 +417,7 @@ class ProtoCrdtIncomingResolverTest {
             localNode = resultA.node,
             localActors = deltaA.actors,
             incomingValue = resultB.value,
-            incomingNode = resultB.node!!,
+            incomingNode = requireNotNull(resultB.node),
             incomingVersionVector = deltaB.actors.versionVectorMap,
         )
         val conflict = conflictDelta.mergeResult

@@ -162,7 +162,7 @@ class ProtoCrdtLocalResolverTest {
         val res1 = delta.mergeResult
         assertThat(res1.resolution).isTrue()
         assertThat(res1.value).isEqualTo(initial)
-        val node1 = res1.node!!
+        val node1 = res1.node
 
         // Step 2: Update k2 and add k3
         val updated = TestMessage.newBuilder()
@@ -183,7 +183,7 @@ class ProtoCrdtLocalResolverTest {
 
         assertThat(res2.resolution).isTrue()
         assertThat(res2.value).isEqualTo(updated)
-        val node2 = res2.node!!
+        val node2 = requireNotNull(res2.node)
 
         // Confirm all 3 keys tracked
         assertThat(node2.struct.fieldsMap[19]?.stringMap?.entriesMap?.keys)
@@ -207,7 +207,7 @@ class ProtoCrdtLocalResolverTest {
 
         assertThat(res3.resolution).isTrue()
         assertThat(res3.value).isEqualTo(removed)
-        val node3 = res3.node!!
+        val node3 = requireNotNull(res3.node)
 
         // k2 tombstone retained, all keys still tracked
         assertThat(node3.struct.fieldsMap[19]?.stringMap?.entriesMap?.keys)
@@ -225,7 +225,7 @@ class ProtoCrdtLocalResolverTest {
 
         assertThat(res4.resolution).isFalse()
         assertThat(res4.value).isEqualTo(removed)
-        val node4 = res4.node!!
+        val node4 = requireNotNull(res4.node)
 
         // All keys still tracked
         assertThat(node4.struct.fieldsMap[19]?.stringMap?.entriesMap?.keys)
@@ -259,8 +259,9 @@ class ProtoCrdtLocalResolverTest {
         val result1 = delta1.mergeResult
 
         assertThat(result1.resolution).isTrue()
-        assertThat(result1.value!!.nestedListValueList).hasSize(2)
-        assertThat(result1.value!!.nestedListValueList)
+        val value1 = requireNotNull(result1.value)
+        assertThat(value1.nestedListValueList).hasSize(2)
+        assertThat(value1.nestedListValueList)
             .containsExactly(lineItem1, lineItem2)
             .inOrder()
 
@@ -286,8 +287,9 @@ class ProtoCrdtLocalResolverTest {
         val result2 = delta2.mergeResult
 
         assertThat(result2.resolution).isTrue()
-        assertThat(result2.value!!.nestedListValueList).hasSize(3)
-        assertThat(result2.value!!.nestedListValueList)
+        val value2 = requireNotNull(result2.value)
+        assertThat(value2.nestedListValueList).hasSize(3)
+        assertThat(value2.nestedListValueList)
             .containsExactly(lineItem1, lineItem2, lineItem3)
             .inOrder()
 
@@ -309,7 +311,8 @@ class ProtoCrdtLocalResolverTest {
         val result3 = delta3.mergeResult
 
         assertThat(result3.resolution).isTrue()
-        assertThat(result3.value!!.getNestedListValue(1)).isEqualTo(modifiedLineItem2)
+        val value3 = requireNotNull(result3.value)
+        assertThat(value3.getNestedListValue(1)).isEqualTo(modifiedLineItem2)
 
         // Step 4: Remove last item
         val withRemovedItem = TestMessage.newBuilder()
@@ -327,13 +330,15 @@ class ProtoCrdtLocalResolverTest {
         val result4 = delta4.mergeResult
 
         assertThat(result4.resolution).isTrue()
-        assertThat(result4.value!!.nestedListValueList).hasSize(2)
-        assertThat(result4.value!!.nestedListValueList)
+        val value4 = requireNotNull(result4.value)
+        val node4 = requireNotNull(result4.node)
+        assertThat(value4.nestedListValueList).hasSize(2)
+        assertThat(value4.nestedListValueList)
             .containsExactly(lineItem1, modifiedLineItem2)
             .inOrder()
 
         // Verify version tracking for list field (tag 22)
-        assertThat(result4.node!!.struct.fieldsMap.containsKey(22)).isTrue()
+        assertThat(node4.struct.fieldsMap.containsKey(22)).isTrue()
     }
 
     @Test
@@ -460,8 +465,9 @@ class ProtoCrdtLocalResolverTest {
         assertThat(result4.value?.nestedOptionalValue?.intValue).isEqualTo(120)
 
         // Verify field-level version tracking for optional fields (tags 24, 25)
-        assertThat(result4.node!!.struct.fieldsMap.containsKey(24)).isTrue()
-        assertThat(result4.node!!.struct.fieldsMap.containsKey(25)).isTrue()
+        val node4 = requireNotNull(result4.node)
+        assertThat(node4.struct.fieldsMap.containsKey(24)).isTrue()
+        assertThat(node4.struct.fieldsMap.containsKey(25)).isTrue()
     }
 
     @Test
@@ -497,7 +503,8 @@ class ProtoCrdtLocalResolverTest {
         assertThat(result2.value?.enumValue).isEqualTo(EnumSample.VALUE2)
 
         // Verify field-level version tracking for enum field (tag 15)
-        assertThat(result2.node!!.struct.fieldsMap.containsKey(15)).isTrue()
+        val node2 = requireNotNull(result2.node)
+        assertThat(node2.struct.fieldsMap.containsKey(15)).isTrue()
     }
 
     @Test
@@ -559,7 +566,8 @@ class ProtoCrdtLocalResolverTest {
         assertThat(result3.value?.enumListValueList).containsExactly(EnumSample.VALUE2)
 
         // Verify field-level version tracking for repeated enum field (tag 29)
-        assertThat(result3.node!!.struct.fieldsMap.containsKey(29)).isTrue()
+        val node3 = requireNotNull(result3.node)
+        assertThat(node3.struct.fieldsMap.containsKey(29)).isTrue()
     }
 
     @Test
@@ -633,9 +641,10 @@ class ProtoCrdtLocalResolverTest {
             )
 
         // Verify field-level version tracking for enum map field (tag 21)
-        assertThat(result3.node!!.struct.fieldsMap.containsKey(21)).isTrue()
+        val node3 = requireNotNull(result3.node)
+        assertThat(node3.struct.fieldsMap.containsKey(21)).isTrue()
         // Verify all keys are tracked
-        assertThat(result3.node!!.struct.fieldsMap[21]?.stringMap?.entriesMap?.keys)
+        assertThat(node3.struct.fieldsMap[21]?.stringMap?.entriesMap?.keys)
             .containsExactly("key1", "key2", "key3")
     }
 }

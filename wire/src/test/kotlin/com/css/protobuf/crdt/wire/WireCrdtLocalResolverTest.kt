@@ -8,6 +8,7 @@ import com.css.protobuf.crdt.resolver.NodeMergeResult
 import com.css.protobuf.crdt.wire.internal.WireVersionTreeResolver
 import com.google.common.truth.Truth.assertThat
 import kotlin.test.Test
+import kotlin.test.assertNotNull
 
 /**
  * Tests for CrdtMessageLocalResolver - applyLocalWrite operations.
@@ -151,7 +152,7 @@ class WireCrdtLocalResolverTest {
                 ).mergeResult
             assertThat(res1.resolution).isTrue()
             assertThat(res1.value).isEqualTo(initial)
-            val node1 = res1.node!!
+            val node1 = res1.node
 
             // Step 2: Update k2 and add k3
             val updated = initial.copy(primitiveMapValue = mapOf("k1" to 1, "k2" to 22, "k3" to 3))
@@ -165,7 +166,8 @@ class WireCrdtLocalResolverTest {
                 ).mergeResult
             assertThat(res2.resolution).isTrue()
             assertThat(res2.value).isEqualTo(updated)
-            val node2 = res2.node!!
+            val node2 = res2.node
+            assertNotNull(node2)
             // ✅ Confirm all 3 keys tracked
             assertThat(node2.struct?.fields?.get(19)?.string_map?.entries?.keys).containsExactly("k1", "k2", "k3")
 
@@ -181,7 +183,8 @@ class WireCrdtLocalResolverTest {
                 ).mergeResult
             assertThat(res3.resolution).isTrue()
             assertThat(res3.value).isEqualTo(removed)
-            val node3 = res3.node!!
+            val node3 = res3.node
+            assertNotNull(node3)
             // ✅ k2 tombstone retained, all keys still tracked
             assertThat(node3.struct?.fields?.get(19)?.string_map?.entries?.keys).containsExactly("k1", "k2", "k3")
 
@@ -196,7 +199,8 @@ class WireCrdtLocalResolverTest {
                 ).mergeResult
             assertThat(res4.resolution).isFalse()
             assertThat(res4.value).isEqualTo(removed)
-            val node4 = res4.node!!
+            val node4 = res4.node
+            assertNotNull(node4)
             // ✅ All keys still tracked
             assertThat(node4.struct?.fields?.get(19)?.string_map?.entries?.keys).containsExactly("k1", "k2", "k3")
         }

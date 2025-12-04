@@ -10,12 +10,15 @@ import com.css.protobuf.crdt.data.Version
 import com.css.protobuf.crdt.data.VersionNode
 import com.css.protobuf.crdt.data.VersionNode.Struct
 import com.css.protobuf.crdt.resolver.ResolverDeltaResult
+import com.css.protobuf.crdt.resolver.version.ResolutionStrategy
 import com.css.protobuf.crdt.resolver.version.ResolutionStrategy.INCOMING
 import com.css.protobuf.crdt.resolver.version.ResolutionStrategy.MERGED_VALUES
 import com.css.protobuf.crdt.resolver.version.ResolutionStrategy.NO_CHANGE
 import com.google.common.truth.Truth.assertThat
+import org.checkerframework.checker.units.qual.m
 import java.time.Instant
 import kotlin.test.Test
+import kotlin.test.assertNotNull
 
 /**
  * Tests for CrdtMessageIncomingResolver - resolveConflict operations.
@@ -124,7 +127,8 @@ class WireCrdtIncomingResolverTest {
         val delta5 = adapter.resolveConflict(lhs = result4, rhs = delta3)
         val result5 = delta5.mergeResult
 
-        var mergedProto = result5.value!!
+        var mergedProto = result5.value
+        assertNotNull(mergedProto)
 
         assertThat(mergedProto.int32Value).isEqualTo(5)
         assertThat(mergedProto.int64Value).isEqualTo(20)
@@ -202,7 +206,8 @@ class WireCrdtIncomingResolverTest {
             )
         )
 
-        mergedProto = result7.value!!
+        mergedProto = result7.value
+        assertNotNull(mergedProto)
 
         assertThat(mergedProto.int32Value).isEqualTo(5)
         assertThat(mergedProto.int64Value).isEqualTo(20)
@@ -263,7 +268,8 @@ class WireCrdtIncomingResolverTest {
             )
         )
 
-        mergedProto = result9.value!!
+        mergedProto = result9.value
+        assertNotNull(mergedProto)
 
         assertThat(mergedProto.int32Value).isEqualTo(5)
         assertThat(mergedProto.int64Value).isEqualTo(20)
@@ -387,17 +393,20 @@ class WireCrdtIncomingResolverTest {
         assertThat(conflict.value?.primitiveOptionalValue).isEqualTo(100)
         assertThat(conflict.value?.nestedOptionalValue).isEqualTo(NestedMessage("device_b", 200))
     }
+}
 
-    // Helper methods
-    private fun <T, S1, S2> WireCrdtMessageResolver<T>.resolveConflict(
-        lhs: ResolverDeltaResult<T, VersionNode, Version, S1, PathComponent, Actors>,
-        rhs: ResolverDeltaResult<T, VersionNode, Version, S2, PathComponent, Actors>,
-    ) = resolveConflict(
+fun <T, S1, S2> WireCrdtMessageResolver<T>.resolveConflict(
+    lhs: ResolverDeltaResult<T, VersionNode, Version, S1, PathComponent, Actors>,
+    rhs: ResolverDeltaResult<T, VersionNode, Version, S2, PathComponent, Actors>,
+): ResolverDeltaResult<T, VersionNode, Version, ResolutionStrategy, PathComponent, Actors> {
+    val incomingNode = rhs.mergeResult.node
+    assertNotNull(incomingNode)
+    return resolveConflict(
         localValue = lhs.mergeResult.value,
-        localNode = lhs.mergeResult.node!!,
+        localNode = lhs.mergeResult.node,
         localActors = lhs.actors,
         incomingValue = rhs.mergeResult.value,
-        incomingNode = rhs.mergeResult.node!!,
+        incomingNode = incomingNode,
         incomingVersionVector = rhs.actors.version_vector,
     )
 }

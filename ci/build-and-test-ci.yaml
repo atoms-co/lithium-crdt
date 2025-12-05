@@ -24,9 +24,9 @@ jobs:
       - name: Build
         id: build
         run: |
-          ./gradlew clean build --no-daemon
+          ./gradlew clean build
 
       - name: Run Tests
         id: test
         run: |
-          ./gradlew test --no-daemon
+          ./gradlew test

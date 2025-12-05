@@ -9,7 +9,7 @@ inputs:
     required: false
     default: "patch"
     description: "Version bump type: major, minor, or patch (Default: patch)"
-    options: ["major", "minor", "patch", "none"]
+    options: [ "major", "minor", "patch", "none" ]
   version:
     type: string
     required: false
@@ -18,7 +18,7 @@ inputs:
 
 secrets:
   artifactory-username: artifactory-username
-  artifactory-password : artifactory-password
+  artifactory-password: artifactory-password
 
 jobs:
   publish:
@@ -40,6 +40,14 @@ jobs:
       - name: Bump Version
         id: bump_version
         run: |
+          # Debug: Show current state
+          echo "=== Debug Info ==="
+          echo "Current commit: $(git rev-parse HEAD)"
+          echo "Current branch: $(git branch --show-current || echo 'detached HEAD')"
+          echo "Input ref: ${{ inputs.ref }}"
+          echo "Input bump: ${{ inputs.bump }}"
+          echo "=================="
+
           # Skip if explicit version provided
           if [ -n "${{ inputs.version }}" ]; then
             echo "Using explicit version: ${{ inputs.version }}"
@@ -53,9 +61,37 @@ jobs:
             exit 0
           fi
 
+          # Extract branch name (strip origin/ prefix if present)
+          REF="${{ inputs.ref }}"
+          BRANCH="${REF#origin/}"
+
+          # Check if ref looks like a SHA (40 hex chars) or short SHA (7+ hex chars)
+          if echo "$BRANCH" | grep -qE '^[0-9a-f]{7,40}$'; then
+            echo "ERROR: ref appears to be a SHA ($BRANCH), cannot push version bump."
+            echo "To publish with version bump, use a branch name instead of SHA."
+            echo "Alternatively, use bump=none to skip version bumping."
+            exit 1
+          fi
+
+          # Fetch latest and rebase BEFORE making changes (working tree must be clean)
+          echo "Fetching latest from origin/$BRANCH..."
+          if ! git fetch origin "$BRANCH"; then
+            echo "ERROR: Failed to fetch origin/$BRANCH"
+            exit 1
+          fi
+
+          echo "Rebasing onto origin/$BRANCH..."
+          if ! git rebase "origin/$BRANCH"; then
+            echo "ERROR: Failed to rebase onto origin/$BRANCH"
+            git rebase --abort || true
+            exit 1
+          fi
+          echo "Current commit after rebase: $(git rev-parse HEAD)"
+
+          # Now bump the version (after rebase so working tree is clean)
           echo "Bumping ${{ inputs.bump }} version..."
           chmod +x scripts/bump-version.sh
-          ./scripts/bump-version.sh ${{ inputs.bump }}
+          ./scripts/bump-version.sh ${{ inputs.bump }} --quiet
 
           # Read the new version
           MAJOR=$(grep "^version.major=" gradle.properties | cut -d'=' -f2)
@@ -64,15 +100,19 @@ jobs:
           NEW_VERSION="$MAJOR.$MINOR.$PATCH"
           echo "NEW_VERSION=$NEW_VERSION" >> $GITHUB_ENV
 
-          # Commit and push the version bump
+          # Commit the version bump (don't push yet - wait for successful build/publish)
+          echo "Committing version bump..."
           git add gradle.properties
           git commit -m "Bump version to $NEW_VERSION"
-          git push origin ${{ inputs.ref }}
+          echo "Commit created: $(git rev-parse HEAD)"
+
+          # Store branch name for later push step
+          echo "BUMP_BRANCH=$BRANCH" >> $GITHUB_ENV
 
       - name: Build
         id: build
         run: |
-          ./gradlew clean build --no-daemon
+          ./gradlew clean build
 
       - name: "Publish to Artifactory"
         id: publish
@@ -84,7 +124,7 @@ jobs:
           if [ -n "$EXPLICIT_VERSION" ]; then
             VERSION="$EXPLICIT_VERSION"
             echo "Publishing version: $VERSION (explicit override)"
-            ./gradlew publish -Pversion="$VERSION" --no-daemon
+            ./gradlew publish -Pversion="$VERSION"
           else
             # Use version from gradle.properties (possibly bumped)
             MAJOR=$(grep "^version.major=" gradle.properties | cut -d'=' -f2)
@@ -92,8 +132,50 @@ jobs:
             PATCH=$(grep "^version.patch=" gradle.properties | cut -d'=' -f2)
             VERSION="$MAJOR.$MINOR.$PATCH"
             echo "Publishing version: $VERSION"
-            ./gradlew publish --no-daemon
+            ./gradlew publish
           fi
+
+      # Push version bump and tag only after successful build and publish
+      - name: "Push Version and Tag"
+        id: push_version
+        run: |
+          # Skip if no version bump was performed
+          if [ -z "$BUMP_BRANCH" ]; then
+            echo "No version bump to push (bump=none or explicit version)"
+            exit 0
+          fi
+
+          # Get the version for tagging
+          if [ -n "$EXPLICIT_VERSION" ]; then
+            VERSION="$EXPLICIT_VERSION"
+          else
+            MAJOR=$(grep "^version.major=" gradle.properties | cut -d'=' -f2)
+            MINOR=$(grep "^version.minor=" gradle.properties | cut -d'=' -f2)
+            PATCH=$(grep "^version.patch=" gradle.properties | cut -d'=' -f2)
+            VERSION="$MAJOR.$MINOR.$PATCH"
+          fi
+
+          TAG_NAME="v$VERSION"
+          echo "Creating tag: $TAG_NAME"
+
+          # Create annotated tag
+          git tag -a "$TAG_NAME" -m "Release $VERSION"
+
+          # Push the version bump commit and tag
+          echo "Pushing version bump to branch: $BUMP_BRANCH"
+          if ! git push origin HEAD:refs/heads/"$BUMP_BRANCH"; then
+            echo "ERROR: Failed to push version bump to $BUMP_BRANCH"
+            echo "Check that the CI runner has write access to the repository."
+            exit 1
+          fi
+          echo "✓ Version bump pushed successfully"
+
+          echo "Pushing tag: $TAG_NAME"
+          if ! git push origin "$TAG_NAME"; then
+            echo "ERROR: Failed to push tag $TAG_NAME"
+            exit 1
+          fi
+          echo "✓ Tag $TAG_NAME pushed successfully"
 
 post:
   - on: success

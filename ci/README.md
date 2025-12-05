@@ -25,14 +25,14 @@ Builds and tests the library. This workflow is designed for pull request validat
 
 **Usage:**
 ```bash
-# Run interactive
-css ci trigger android/internal/shared/storage/crdt/protobuf-crdt/build-and-test-ci.yaml
+# Run interactive (recommended: use --sha HEAD to read yaml from current branch)
+css ci trigger ci/build-and-test-ci.yaml --sha HEAD
 
 # Build from a specific branch
-css ci trigger android/internal/shared/storage/crdt/protobuf-crdt/build-and-test-ci.yaml --input ref=origin/feature-branch
+css ci trigger ci/build-and-test-ci.yaml --sha HEAD --input ref=origin/feature-branch
 
 # Build from a specific commit SHA
-css ci trigger android/internal/shared/storage/crdt/protobuf-crdt/build-and-test-ci.yaml --input ref=abc123def456
+css ci trigger ci/build-and-test-ci.yaml --sha HEAD --input ref=abc123def456
 ```
 
 ### publish-ci.yaml
@@ -60,27 +60,31 @@ Publishes the library artifacts to Artifactory. Use this workflow for releases a
 
 **Usage:**
 ```bash
-# Run interactive
-css ci trigger android/internal/shared/storage/crdt/protobuf-crdt/publish-ci.yaml
+# Run interactive (recommended: use --sha HEAD to read yaml from current branch)
+css ci trigger ci/publish-ci.yaml --sha HEAD
+
+# Release from master with patch bump (default)
+css ci trigger ci/publish-ci.yaml --sha HEAD --input ref=origin/master
 
 # Release from a specific branch
-css ci trigger android/internal/shared/storage/crdt/protobuf-crdt/publish-ci.yaml --input ref=origin/release-branch
-
-# Release from a specific commit SHA
-css ci trigger android/internal/shared/storage/crdt/protobuf-crdt/publish-ci.yaml --input ref=abc123def456
+css ci trigger ci/publish-ci.yaml --sha HEAD --input ref=origin/release-branch
 
 # Minor release (auto-increments minor: 1.0.5 → 1.1.0)
-css ci trigger android/internal/shared/storage/crdt/protobuf-crdt/publish-ci.yaml --input bump=minor
+css ci trigger ci/publish-ci.yaml --sha HEAD --input bump=minor
 
 # Major release (auto-increments major: 1.5.3 → 2.0.0)
-css ci trigger android/internal/shared/storage/crdt/protobuf-crdt/publish-ci.yaml --input bump=major
+css ci trigger ci/publish-ci.yaml --sha HEAD --input bump=major
 
 # Publish without incrementing version
-css ci trigger android/internal/shared/storage/crdt/protobuf-crdt/publish-ci.yaml --input bump=none
+css ci trigger ci/publish-ci.yaml --sha HEAD --input bump=none
 
 # Publish with explicit version override (skips auto-increment)
-css ci trigger android/internal/shared/storage/crdt/protobuf-crdt/publish-ci.yaml --input version=1.2.3
+css ci trigger ci/publish-ci.yaml --sha HEAD --input version=1.2.3
 ```
+
+**Important:** Always use `--sha HEAD` to ensure CI reads the pipeline yaml from your current branch. Without this flag, CI may use a cached or default branch version of the yaml file.
+
+**Note:** When using a version bump with a SHA ref (e.g., `ref=abc123def456`), the bump will fail because there's no branch to push the version commit to. Use `bump=none` with explicit SHA refs, or use branch names for automatic version bumping.
 
 **Version Management:**
 
@@ -91,11 +95,18 @@ The version is managed via three properties in `gradle.properties`:
 
 ### Automatic Version Bumping
 
-The publish workflow automatically increments the version and commits it back to the repository:
+The publish workflow automatically increments the version, commits, and pushes it back to the repository:
 
-1. **Default (patch)**: `1.0.0` → `1.0.1`
-2. **Minor bump**: `1.0.5` → `1.1.0` (resets patch to 0)
-3. **Major bump**: `1.5.3` → `2.0.0` (resets minor and patch to 0)
+1. Fetches and rebases onto the latest branch state
+2. Runs `scripts/bump-version.sh` to update `gradle.properties`
+3. Commits the version bump
+4. Pushes the commit back to the branch
+
+**Version bump types:**
+- **Default (patch)**: `1.0.0` → `1.0.1`
+- **Minor bump**: `1.0.5` → `1.1.0` (resets patch to 0)
+- **Major bump**: `1.5.3` → `2.0.0` (resets minor and patch to 0)
+- **none**: Skips version bump entirely (publishes current version)
 
 All five modules (`crdt-resolver`, `crdt-protoc`, `crdt-protoc-data`, `crdt-wire`, `crdt-wire-data`) are always 
 published with the 

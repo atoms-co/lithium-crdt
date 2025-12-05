@@ -115,6 +115,22 @@ This repository uses **Gradle 9.2.1 with Kotlin DSL** as a standalone library in
 ./gradlew :wire:dependencies --configuration runtimeClasspath
 ```
 
+#### CI Publishing
+```bash
+# Trigger CI publish pipeline (uses yaml from current branch HEAD)
+css ci trigger ci/publish-ci.yaml --sha HEAD
+
+# Publish from a specific branch with version bump
+css ci trigger ci/publish-ci.yaml --sha HEAD --input ref=origin/master --input bump=patch
+
+# Publish with explicit version (no bump)
+css ci trigger ci/publish-ci.yaml --sha HEAD --input ref=origin/master --input bump=none --input version=1.2.3
+```
+
+**Important:** Always use `--sha HEAD` to ensure CI reads the pipeline yaml from your current branch. Without this, CI may use a cached or default branch version of the yaml file.
+
+See `ci/README.md` for complete CI documentation.
+
 ### Maven Publishing Configuration
 
 The library publishes 5 artifacts to Maven repositories:

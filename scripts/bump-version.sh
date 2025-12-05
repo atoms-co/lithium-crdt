@@ -2,20 +2,31 @@
 set -e
 
 # Script to bump version in gradle.properties
-# Usage: ./scripts/bump-version.sh [major|minor|patch]
+# Usage: ./scripts/bump-version.sh [major|minor|patch] [--quiet]
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 GRADLE_PROPERTIES="$PROJECT_DIR/gradle.properties"
 
-# Determine bump type (default to patch)
-BUMP_TYPE="${1:-patch}"
+# Parse arguments
+BUMP_TYPE="patch"
+QUIET=false
 
-if [[ ! "$BUMP_TYPE" =~ ^(major|minor|patch)$ ]]; then
-    echo "Error: Invalid bump type. Must be 'major', 'minor', or 'patch'"
-    echo "Usage: $0 [major|minor|patch]"
-    exit 1
-fi
+for arg in "$@"; do
+    case "$arg" in
+        --quiet|-q)
+            QUIET=true
+            ;;
+        major|minor|patch)
+            BUMP_TYPE="$arg"
+            ;;
+        *)
+            echo "Error: Invalid argument '$arg'"
+            echo "Usage: $0 [major|minor|patch] [--quiet]"
+            exit 1
+            ;;
+    esac
+done
 
 # Read current version components
 MAJOR=$(grep "^version.major=" "$GRADLE_PROPERTIES" | cut -d'=' -f2)
@@ -52,9 +63,12 @@ sed -i.bak "s/^version.patch=.*/version.patch=$PATCH/" "$GRADLE_PROPERTIES"
 rm -f "$GRADLE_PROPERTIES.bak"
 
 echo "✓ Version bumped to $NEW_VERSION in gradle.properties"
-echo ""
-echo "Next steps:"
-echo "  1. Review the changes: git diff gradle.properties"
-echo "  2. Commit the version bump: git add gradle.properties && git commit -m \"Bump version to $NEW_VERSION\""
-echo "  3. Push to remote: git push"
-echo "  4. Trigger publish: css ci trigger publish-ci --branch=master"
+
+if [ "$QUIET" = false ]; then
+    echo ""
+    echo "Next steps:"
+    echo "  1. Review the changes: git diff gradle.properties"
+    echo "  2. Commit the version bump: git add gradle.properties && git commit -m \"Bump version to $NEW_VERSION\""
+    echo "  3. Push to remote: git push"
+    echo "  4. Trigger publish: css ci trigger publish-ci --branch=master"
+fi

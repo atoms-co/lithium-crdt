@@ -29,7 +29,7 @@ import "google/protobuf/descriptor.proto";
  * Add this option to your CRDT message definitions:
  *
  *   message Order {
- *     option (com.css.protobuf.crdt.data.crdt_type_name) = "Order";
+ *     option (com.css.protobuf.crdt.data.options.crdt_type_name) = "Order";
  *     // ... your fields
  *   }
  *
@@ -71,11 +71,4 @@ message CrdtData {
   // message option defined on your CRDT message type. Used by backend nodes
   // to validate, route, or deserialize the data field without prior deserialization.
   string crdt_type_name = 2;
-}
-
-extend google.protobuf.MessageOptions {
-  // The crdt type name associated with this message
-  // Used as a durable key to identify the type of data being stored as a crdt.
-  // This value should be globally unique across all crdt message types and should not change once assigned.
-  string crdt_type_name = 9200;
 }

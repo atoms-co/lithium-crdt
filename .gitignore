@@ -110,7 +110,8 @@ Temporary Items
 !.idea/icon.svg
 !.idea/inspectionProfiles/
 !.idea/kotlinc.xml
-!.idea/misc.xml
+# misc.xml contains user-specific JDK names, so we ignore it
+# !.idea/misc.xml
 !.idea/runConfigurations/
 !.idea/scopes/
 !.idea/vcs.xml

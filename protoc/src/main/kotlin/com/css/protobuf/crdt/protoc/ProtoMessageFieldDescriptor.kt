@@ -1,10 +1,10 @@
 package com.css.protobuf.crdt.protoc
 
-import com.css.protobuf.crdt.data.options.MergeOptions.FieldMergeStrategy
-import com.css.protobuf.crdt.data.options.MergeOptions.crdtIdField
-import com.css.protobuf.crdt.data.options.MergeOptions.crdtMaxTombstones
-import com.css.protobuf.crdt.data.options.MergeOptions.crdtMergeStrategy
-import com.css.protobuf.crdt.data.options.MergeOptions.crdtTombstoneTtl
+import com.css.protobuf.crdt.data.options.FieldOptions.crdtIdField
+import com.css.protobuf.crdt.data.options.FieldOptions.crdtMergeStrategy
+import com.css.protobuf.crdt.data.options.FieldOptions.FieldMergeStrategy
+import com.css.protobuf.crdt.data.options.FieldOptions.crdtMaxTombstones
+import com.css.protobuf.crdt.data.options.FieldOptions.crdtTombstoneTtl
 import com.css.protobuf.crdt.resolver.descriptor.CollectionType
 import com.css.protobuf.crdt.resolver.descriptor.KeyType
 import com.css.protobuf.crdt.resolver.descriptor.MessageBuilder

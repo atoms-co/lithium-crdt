@@ -71,4 +71,8 @@ message DocumentDelta {
   // CRDT data type name that this delta applies to
   // derived from the crdt_type_name message options
   string crdt_type_name = 6;
+
+  // Baseline actor version vector known to the sender at the time of this delta
+  // This is the actor versions that the changes are based upon
+  map<int64, int64> baseline_version_vector = 7;
 }

@@ -226,7 +226,7 @@ The library has been tested in production on low-end Android devices (min SDK 24
 
 ## License
 
-TODO 
+This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENSE) file for details.
 
 ## Acknowledgments
 

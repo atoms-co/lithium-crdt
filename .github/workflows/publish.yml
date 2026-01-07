@@ -1,0 +1,159 @@
+name: Publish to Maven Central
+
+on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: 'Version bump type'
+        required: false
+        default: 'patch'
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+          - none
+      version:
+        description: 'Explicit version override (skips auto-increment if provided)'
+        required: false
+        type: string
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Configure Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Bump Version
+        id: bump_version
+        run: |
+          # Skip if explicit version provided
+          if [ -n "${{ inputs.version }}" ]; then
+            echo "Using explicit version: ${{ inputs.version }}"
+            echo "version=${{ inputs.version }}" >> $GITHUB_OUTPUT
+            echo "EXPLICIT_VERSION=${{ inputs.version }}" >> $GITHUB_ENV
+            exit 0
+          fi
+
+          # Skip if bump=none
+          if [ "${{ inputs.bump }}" = "none" ]; then
+            echo "Skipping version bump (bump=none)"
+            MAJOR=$(grep "^version.major=" gradle.properties | cut -d'=' -f2)
+            MINOR=$(grep "^version.minor=" gradle.properties | cut -d'=' -f2)
+            PATCH=$(grep "^version.patch=" gradle.properties | cut -d'=' -f2)
+            VERSION="$MAJOR.$MINOR.$PATCH"
+            echo "version=$VERSION" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          # Bump the version
+          echo "Bumping ${{ inputs.bump }} version..."
+          chmod +x scripts/bump-version.sh
+          ./scripts/bump-version.sh ${{ inputs.bump }} --quiet
+
+          # Read the new version
+          MAJOR=$(grep "^version.major=" gradle.properties | cut -d'=' -f2)
+          MINOR=$(grep "^version.minor=" gradle.properties | cut -d'=' -f2)
+          PATCH=$(grep "^version.patch=" gradle.properties | cut -d'=' -f2)
+          NEW_VERSION="$MAJOR.$MINOR.$PATCH"
+          echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT
+          echo "NEW_VERSION=$NEW_VERSION" >> $GITHUB_ENV
+
+          # Commit the version bump
+          echo "Committing version bump..."
+          git add gradle.properties
+          git commit -m "Bump version to $NEW_VERSION"
+          echo "VERSION_BUMPED=true" >> $GITHUB_ENV
+
+      - name: Build
+        run: ./gradlew clean build
+
+      - name: Run Tests
+        run: ./gradlew test
+
+      - name: Import GPG Key
+        uses: crazy-max/ghaction-import-gpg@v6
+        with:
+          gpg_private_key: ${{ secrets.GPG_SIGNING_KEY }}
+          passphrase: ${{ secrets.GPG_PASSPHRASE }}
+
+      - name: Publish to Maven Central
+        env:
+          OSSRH_USERNAME: ${{ secrets.OSSRH_USERNAME }}
+          OSSRH_PASSWORD: ${{ secrets.OSSRH_PASSWORD }}
+          SIGNING_KEY_ID: ${{ secrets.GPG_KEY_ID }}
+          SIGNING_PASSWORD: ${{ secrets.GPG_PASSPHRASE }}
+        run: |
+          if [ -n "$EXPLICIT_VERSION" ]; then
+            echo "Publishing version: $EXPLICIT_VERSION (explicit override)"
+            ./gradlew publishToSonatype closeAndReleaseSonatypeStagingRepository -Pversion="$EXPLICIT_VERSION"
+          else
+            VERSION="${{ steps.bump_version.outputs.version }}"
+            echo "Publishing version: $VERSION"
+            ./gradlew publishToSonatype closeAndReleaseSonatypeStagingRepository
+          fi
+
+      - name: Push Version and Tag
+        if: env.VERSION_BUMPED == 'true'
+        run: |
+          VERSION="${{ steps.bump_version.outputs.version }}"
+          TAG_NAME="v$VERSION"
+
+          echo "Creating tag: $TAG_NAME"
+          git tag -a "$TAG_NAME" -m "Release $VERSION"
+
+          echo "Pushing version bump and tag..."
+          git push origin HEAD:${{ github.ref_name }}
+          git push origin "$TAG_NAME"
+
+          echo "Version $VERSION published and tagged successfully"
+
+      - name: Create GitHub Release
+        if: env.VERSION_BUMPED == 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.bump_version.outputs.version }}
+          name: Release ${{ steps.bump_version.outputs.version }}
+          body: |
+            ## protobuf-crdt v${{ steps.bump_version.outputs.version }}
+
+            ### Installation
+
+            **Gradle (Kotlin DSL)**
+            ```kotlin
+            implementation("com.css.protobuf.crdt:crdt-wire:${{ steps.bump_version.outputs.version }}")
+            ```
+
+            **Maven**
+            ```xml
+            <dependency>
+                <groupId>com.css.protobuf.crdt</groupId>
+                <artifactId>crdt-protoc</artifactId>
+                <version>${{ steps.bump_version.outputs.version }}</version>
+            </dependency>
+            ```
+
+            See [Maven Central](https://search.maven.org/search?q=g:com.css.protobuf.crdt) for all artifacts.
+          draft: false
+          prerelease: false

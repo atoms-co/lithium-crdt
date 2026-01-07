@@ -1,92 +1,102 @@
 # CI Workflows
 
-This directory contains CI workflow definitions for the protobuf-crdt library using the CSS CI DSL.
+This directory previously contained internal CI workflow definitions. The project now uses **GitHub Actions** for CI/CD.
 
-**Repository:** https://github.com/csscompany-enterprise/protobuf-crdt
+## GitHub Actions Workflows
 
-**CSS CI DSL Documentation:** https://csscompany.atlassian.net/wiki/spaces/CDLBS/pages/2327969872/CSS+CI+DSL
+All workflows are located in `.github/workflows/`:
 
-## Available Workflows
+### build-and-test.yml
 
-### build-and-test-ci.yaml
+Automatically builds and tests the library on every push and pull request.
 
-Builds and tests the library. This workflow is designed for pull request validation and continuous integration.
-
-**Inputs:**
-- `ref` (optional): Git ref to build - branch or SHA (default: `origin/master`)
-
-**Secrets:** None required (uses public repositories)
+**Triggers:**
+- Push to `master` or `main` branch
+- Pull requests targeting `master` or `main`
 
 **Steps:**
 1. Checkout repository
-2. Setup Java 17+
+2. Setup Java 17 (Temurin)
 3. Run `./gradlew clean build`
 4. Run `./gradlew test`
+5. Upload test results as artifacts
 
-**Usage:**
-```bash
-# Run interactive (recommended: use --sha HEAD to read yaml from current branch)
-css ci trigger ci/build-and-test-ci.yaml --sha HEAD
+### publish.yml
 
-# Build from a specific branch
-css ci trigger ci/build-and-test-ci.yaml --sha HEAD --input ref=origin/feature-branch
+Publishes the library artifacts to Maven Central. This workflow is manually triggered.
 
-# Build from a specific commit SHA
-css ci trigger ci/build-and-test-ci.yaml --sha HEAD --input ref=abc123def456
-```
-
-### publish-ci.yaml
-
-Publishes the library artifacts to Artifactory. Use this workflow for releases and deployments.
+**Triggers:**
+- Manual dispatch via GitHub Actions UI or `gh` CLI
 
 **Inputs:**
-- `ref` (optional): Git ref to release - branch or SHA (default: `origin/master`)
 - `bump` (optional): Version bump type - `major`, `minor`, `patch`, or `none` (default: `patch`)
 - `version` (optional): Explicit version override (skips auto-increment if provided)
 
-**Secrets:**
-- `artifactory-username`: Artifactory username
-- `artifactory-password`: Artifactory password
+**Required Secrets:**
+- `OSSRH_USERNAME`: Maven Central (Sonatype OSSRH) username
+- `OSSRH_PASSWORD`: Maven Central (Sonatype OSSRH) password or token
+- `GPG_SIGNING_KEY`: GPG private key for artifact signing (ASCII-armored)
+- `GPG_PASSPHRASE`: Passphrase for the GPG key
+- `GPG_KEY_ID`: GPG key ID (short form)
 
 **Steps:**
 1. Checkout repository
-2. Setup Java 17+
-3. Run `./gradlew clean build`
-4. Run `./gradlew publish`
+2. Setup Java 17 (Temurin)
+3. Bump version (if requested)
+4. Run `./gradlew clean build`
+5. Run `./gradlew test`
+6. Sign and publish to Maven Central
+7. Push version bump commit and tag
+8. Create GitHub Release
 
-**Post Actions:**
-- On success: Notifies `#android` Slack channel with published version and commit link
-- On failure: Notifies `#android` Slack channel with failure details
+## Usage
 
-**Usage:**
+### Running Workflows via GitHub UI
+
+1. Go to the repository's **Actions** tab
+2. Select the workflow you want to run
+3. Click **Run workflow**
+4. Fill in the inputs and click **Run workflow**
+
+### Running Workflows via `gh` CLI
+
 ```bash
-# Run interactive (recommended: use --sha HEAD to read yaml from current branch)
-css ci trigger ci/publish-ci.yaml --sha HEAD
+# Run build and test (typically automatic, but can be manually triggered)
+gh workflow run build-and-test.yml
 
-# Release from master with patch bump (default)
-css ci trigger ci/publish-ci.yaml --sha HEAD --input ref=origin/master
+# Publish with patch version bump (default)
+gh workflow run publish.yml
 
-# Release from a specific branch
-css ci trigger ci/publish-ci.yaml --sha HEAD --input ref=origin/release-branch
+# Publish with minor version bump
+gh workflow run publish.yml -f bump=minor
 
-# Minor release (auto-increments minor: 1.0.5 → 1.1.0)
-css ci trigger ci/publish-ci.yaml --sha HEAD --input bump=minor
+# Publish with major version bump
+gh workflow run publish.yml -f bump=major
 
-# Major release (auto-increments major: 1.5.3 → 2.0.0)
-css ci trigger ci/publish-ci.yaml --sha HEAD --input bump=major
+# Publish without version bump
+gh workflow run publish.yml -f bump=none
 
-# Publish without incrementing version
-css ci trigger ci/publish-ci.yaml --sha HEAD --input bump=none
-
-# Publish with explicit version override (skips auto-increment)
-css ci trigger ci/publish-ci.yaml --sha HEAD --input version=1.2.3
+# Publish with explicit version
+gh workflow run publish.yml -f version=2.0.0
 ```
 
-**Important:** Always use `--sha HEAD` to ensure CI reads the pipeline yaml from your current branch. Without this flag, CI may use a cached or default branch version of the yaml file.
+### Monitoring Workflow Runs
 
-**Note:** When using a version bump with a SHA ref (e.g., `ref=abc123def456`), the bump will fail because there's no branch to push the version commit to. Use `bump=none` with explicit SHA refs, or use branch names for automatic version bumping.
+```bash
+# List recent workflow runs
+gh run list
 
-**Version Management:**
+# Watch a running workflow
+gh run watch
+
+# View workflow run details
+gh run view <run-id>
+
+# View workflow run logs
+gh run view <run-id> --log
+```
+
+## Version Management
 
 The version is managed via three properties in `gradle.properties`:
 - `version.major` - Major version (breaking changes)
@@ -95,26 +105,23 @@ The version is managed via three properties in `gradle.properties`:
 
 ### Automatic Version Bumping
 
-The publish workflow automatically increments the version, commits, and pushes it back to the repository:
+The publish workflow automatically increments the version, commits, tags, and pushes:
 
-1. Fetches and rebases onto the latest branch state
-2. Runs `scripts/bump-version.sh` to update `gradle.properties`
-3. Commits the version bump
-4. Pushes the commit back to the branch
+1. Runs `scripts/bump-version.sh` to update `gradle.properties`
+2. Commits the version bump
+3. Creates an annotated tag (e.g., `v1.2.3`)
+4. Pushes the commit and tag
+5. Creates a GitHub Release
 
 **Version bump types:**
-- **Default (patch)**: `1.0.0` → `1.0.1`
-- **Minor bump**: `1.0.5` → `1.1.0` (resets patch to 0)
-- **Major bump**: `1.5.3` → `2.0.0` (resets minor and patch to 0)
+- **patch** (default): `1.0.0` → `1.0.1`
+- **minor**: `1.0.5` → `1.1.0` (resets patch to 0)
+- **major**: `1.5.3` → `2.0.0` (resets minor and patch to 0)
 - **none**: Skips version bump entirely (publishes current version)
-
-All five modules (`crdt-resolver`, `crdt-protoc`, `crdt-protoc-data`, `crdt-wire`, `crdt-wire-data`) are always 
-published with the 
-same version.
 
 ## Published Artifacts
 
-All artifacts are published to Artifactory under the group `com.css.internal.shared.storage.crdt`:
+All artifacts are published to Maven Central under the group `com.css.protobuf.crdt`:
 
 | Artifact ID | Description | Target Platform |
 |-------------|-------------|-----------------|
@@ -124,26 +131,64 @@ All artifacts are published to Artifactory under the group `com.css.internal.sha
 | `crdt-wire` | Wire CRDT implementation | Android/Kotlin |
 | `crdt-wire-data` | Wire-generated protobuf classes | Android/Kotlin |
 
+## Setting Up Secrets
+
+To enable Maven Central publishing, configure these repository secrets in GitHub:
+
+### 1. Sonatype OSSRH Credentials
+
+1. Create an account at https://central.sonatype.org/
+2. Create a user token in your Sonatype account settings
+3. Add `OSSRH_USERNAME` and `OSSRH_PASSWORD` secrets
+
+### 2. GPG Signing Key
+
+```bash
+# Generate a GPG key (if you don't have one)
+gpg --full-generate-key
+
+# List keys to get the key ID
+gpg --list-secret-keys --keyid-format SHORT
+
+# Export the private key (ASCII-armored)
+gpg --armor --export-secret-keys YOUR_KEY_ID > private-key.asc
+
+# The contents of private-key.asc goes into GPG_SIGNING_KEY secret
+# Your key passphrase goes into GPG_PASSPHRASE secret
+# The short key ID goes into GPG_KEY_ID secret
+```
+
+### 3. Upload Public Key to Keyserver
+
+```bash
+# Upload to Ubuntu keyserver (used by Maven Central)
+gpg --keyserver keyserver.ubuntu.com --send-keys YOUR_KEY_ID
+```
+
 ## Troubleshooting
 
 ### Build Failures
 
-If the build fails:
-1. Check Java version is 17+ in the CI logs
+1. Check Java version is 17+ in the workflow logs
 2. Review Gradle output for dependency resolution issues
-3. Verify the branch exists and is accessible
+3. Ensure all tests pass locally with `./gradlew test`
 
 ### Publishing Failures
 
-If publishing fails:
-1. Verify `artifactory-username` and `artifactory-password` secrets are configured correctly
-2. Check Artifactory URL is accessible from CI environment
-3. Confirm write permissions to the repository
-4. Review version number for conflicts (if using explicit version)
+1. Verify all secrets are configured correctly
+2. Check Sonatype OSSRH credentials are valid
+3. Ensure GPG key is uploaded to a public keyserver
+4. Review the staging repository in Sonatype Nexus if artifacts fail validation
+5. Check that artifact metadata (POM) meets Maven Central requirements
 
-### Test Failures
+### GPG Signing Issues
 
-If tests fail:
-1. Review test output in CI logs
-2. Run tests locally with `./gradlew test --rerun-tasks`
-3. Check for environment-specific issues (CI vs local)
+1. Verify the GPG key is not expired
+2. Ensure the passphrase is correct
+3. Check that the key ID matches the private key
+
+### Version Conflicts
+
+If publishing fails due to version conflicts:
+1. Check if the version already exists on Maven Central
+2. Use `bump=none` with an explicit `version` input to override

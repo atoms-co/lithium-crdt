@@ -40,7 +40,7 @@ The repository is organized into 7 modules with clear separation of concerns:
 
 ## Build System
 
-This repository uses **Gradle 9.2.1 with Kotlin DSL** as a standalone library independent of the CSS monorepo. All dependencies are managed through Gradle version catalogs defined in `settings.gradle.kts`.
+This repository uses **Gradle 9.2.1 with Kotlin DSL**. All dependencies are managed through Gradle version catalogs defined in `settings.gradle.kts`.
 
 ### Common Development Commands
 
@@ -115,53 +115,36 @@ This repository uses **Gradle 9.2.1 with Kotlin DSL** as a standalone library in
 ./gradlew :wire:dependencies --configuration runtimeClasspath
 ```
 
-#### CI Publishing
+#### CI Publishing (GitHub Actions)
 ```bash
-# Trigger CI publish pipeline (uses yaml from current branch HEAD)
-css ci trigger ci/publish-ci.yaml --sha HEAD
+# Publish with patch version bump (default)
+gh workflow run publish.yml
 
-# Publish from a specific branch with version bump
-css ci trigger ci/publish-ci.yaml --sha HEAD --input ref=origin/master --input bump=patch
+# Publish with minor version bump
+gh workflow run publish.yml -f bump=minor
 
-# Publish with explicit version (no bump)
-css ci trigger ci/publish-ci.yaml --sha HEAD --input ref=origin/master --input bump=none --input version=1.2.3
+# Publish with explicit version
+gh workflow run publish.yml -f version=1.2.3
+
+# Monitor workflow run
+gh run watch
 ```
-
-**Important:** Always use `--sha HEAD` to ensure CI reads the pipeline yaml from your current branch. Without this, CI may use a cached or default branch version of the yaml file.
 
 See `ci/README.md` for complete CI documentation.
 
 ### Maven Publishing Configuration
 
-The library publishes 5 artifacts to Maven repositories:
+The library publishes 5 artifacts to Maven Central:
 
 | Artifact ID | Module | Description |
 |-------------|--------|-------------|
 | `crdt-resolver` | resolver | Core algorithms (no protobuf deps) |
-| `crdt-data` | data | Wire-generated data classes |
+| `crdt-data` | wire-data | Wire-generated data classes |
 | `crdt-wire` | wire | Wire CRDT implementation |
 | `crdt-protoc` | protoc | Protoc CRDT implementation |
 | `crdt-protoc-data` | protoc-data | Protoc-generated data classes |
 
 **Group ID:** `com.css.protobuf.crdt`
-
-#### Artifactory Configuration
-
-To publish to your Artifactory instance, add credentials to `~/.gradle/gradle.properties`:
-
-```properties
-artifactory.url=https://your-artifactory.com/libs-release-local
-artifactory.username=your-username
-artifactory.password=your-api-key
-```
-
-Or pass via command line:
-```bash
-./gradlew publish \
-  -Partifactory.url=https://your-artifactory.com/libs-release-local \
-  -Partifactory.username=your-username \
-  -Partifactory.password=your-api-key
-```
 
 #### Consuming from Gradle (Android Projects)
 
@@ -169,13 +152,7 @@ Or pass via command line:
 // In settings.gradle.kts
 dependencyResolutionManagement {
     repositories {
-        maven {
-            url = uri("https://your-artifactory.com/libs-release-local")
-            credentials {
-                username = findProperty("artifactory.username") as String?
-                password = findProperty("artifactory.password") as String?
-            }
-        }
+        mavenCentral()
     }
 }
 
@@ -200,7 +177,6 @@ maven_install(
         "com.css.protobuf.crdt:crdt-resolver:1.0.0",
     ],
     repositories = [
-        "https://your-artifactory.com/libs-release-local",
         "https://repo1.maven.org/maven2",
     ],
 )
@@ -210,8 +186,8 @@ java_library(
     name = "my_service",
     srcs = ["MyService.java"],
     deps = [
-        "@maven//:com_css_internal_shared_storage_crdt_crdt_protoc",
-        "@maven//:com_css_internal_shared_storage_crdt_crdt_protoc_data",
+        "@maven//:com_css_protobuf_crdt_crdt_protoc",
+        "@maven//:com_css_protobuf_crdt_crdt_protoc_data",
     ],
 )
 ```

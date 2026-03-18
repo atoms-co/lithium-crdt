@@ -1,0 +1,74 @@
+syntax = "proto3";
+
+package co.atoms.protobuf.crdt.data;
+
+option java_multiple_files = true;
+
+import "google/protobuf/descriptor.proto";
+
+/*
+ * Wrapper for serialized CRDT data with type identification.
+ *
+ * CrdtData pairs serialized protobuf message bytes with a type identifier,
+ * enabling backend nodes to validate, route, or deserialize CRDT data without
+ * requiring compile-time knowledge of all possible message types.
+ *
+ * USAGE IN DISTRIBUTEDDOCUMENT:
+ * The DistributedDocument.data field uses CrdtData to wrap the actual business
+ * domain message (e.g., Order, User, Inventory) along with its type name.
+ * This allows generic synchronization infrastructure to handle documents
+ * containing any protobuf message type.
+ *
+ * USAGE IN DOCUMENTDELTA:
+ * The DocumentDelta.crdt_type_name field enables incremental updates to be
+ * validated and routed to the correct handler without deserializing the full
+ * document state.
+ *
+ * OBTAINING crdt_type_name VALUE:
+ * The crdt_type_name is defined using the message option extension below.
+ * Add this option to your CRDT message definitions:
+ *
+ *   message Order {
+ *     option (co.atoms.protobuf.crdt.data.options.crdt_type_name) = "Order";
+ *     // ... your fields
+ *   }
+ *
+ * At runtime, access the type name through message descriptors:
+ * - Protoc (Java): descriptor.getOptions().getExtension(Document.crdtTypeName)
+ * - Wire (Kotlin): Message reflection or compile-time constant extraction
+ *
+ * TYPE NAME CONVENTIONS:
+ * - Use simple, stable identifiers (e.g., "Order", "User", "InventoryItem")
+ * - Type names must be globally unique across your CRDT message types
+ * - Never change a type name once deployed (breaks deserialization)
+ * - Consider prefixing with domain/module for large systems (e.g., "orders.Order")
+ *
+ * Example usage (Protoc/Java):
+ *   // Serializing an Order message into CrdtData
+ *   Order order = Order.newBuilder()
+ *       .setCustomerId("customer123")
+ *       .build();
+ *
+ *   // Extract the type name from the message descriptor
+ *   String typeName = order.getDescriptorForType()
+ *       .getOptions()
+ *       .getExtension(co.atoms.protobuf.crdt.data.Option.crdtTypeName);
+ *
+ *   CrdtData crdtData = CrdtData.newBuilder()
+ *       .setData(order.toByteString())
+ *       .setCrdtTypeName(typeName)
+ *       .build();
+ *
+ *   // Backend can now route or validate based on crdt_type_name
+ *   // without deserializing the data field
+ */
+message CrdtData {
+  // Serialized protobuf message bytes containing the actual CRDT document data
+  // This is your business domain message in serialized form
+  bytes data = 1;
+
+  // Type identifier for the serialized data, derived from the crdt_type_name
+  // message option defined on your CRDT message type. Used by backend nodes
+  // to validate, route, or deserialize the data field without prior deserialization.
+  string crdt_type_name = 2;
+}

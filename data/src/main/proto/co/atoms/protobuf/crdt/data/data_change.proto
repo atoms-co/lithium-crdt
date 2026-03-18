@@ -1,0 +1,46 @@
+syntax = "proto3";
+
+package co.atoms.protobuf.crdt.data;
+
+option java_multiple_files = true;
+
+import "co/atoms/protobuf/crdt/data/version_change.proto";
+
+/*
+ * Individual data change combining content and versioning information.
+ *
+ * DataChange represents a single modification to a specific location in the
+ * document, containing both the new data value and the version metadata
+ * needed for conflict-free merging.
+ *
+ * DATA ENCODING:
+ * The 'data' field contains the serialized value for the location specified
+ * by the path in version_change. The encoding depends on the data type:
+ * - Primitive types: Direct protobuf encoding (string, int32, bool, etc.)
+ * - Complex types: Serialized protobuf message bytes
+ * - Deletions: Empty bytes (tombstone indicated by version only)
+ *
+ * PATH SEMANTICS:
+ * The path in version_change.path specifies exactly where this data should
+ * be applied in the document structure:
+ * - [field_number: 2] → Update root-level field 2
+ * - [field_number: 5, string_key: "role"] → Update map entry "role" in field 5
+ * - [field_number: 6, repeated_index: 0] → Update first element of list in field 6
+ *
+ * MERGE BEHAVIOR:
+ * When applying this change, the receiving device will:
+ * 1. Navigate to the specified path in the document
+ * 2. Compare version_change.node.version with existing version at that path
+ * 3. Apply last-write-wins or other CRDT semantics
+ * 4. Update both the data content and version information if change wins
+ */
+message DataChange {
+  // Serialized data value for the location specified by version_change.path
+  // Format depends on the data type at that path location
+  // Empty for deletions (version-only tombstone)
+  bytes data = 1;
+
+  // Version change information specifying path and version for this data
+  // Contains both navigation path and version metadata for conflict resolution
+  VersionChange version_change = 2;
+}

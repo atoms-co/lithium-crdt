@@ -1,0 +1,24 @@
+syntax = "proto3";
+
+package co.atoms.protobuf.crdt.data;
+
+option java_multiple_files = true;
+
+// This file re-exports all document-related messages for backward compatibility.
+// Each message is now defined in its own file for better organization.
+//
+// Individual message files:
+// - crdt_data.proto: CrdtData message and crdt_type_name extension
+// - distributed_document.proto: DistributedDocument message
+// - document_sync.proto: DocumentSync and VersionRange messages
+// - document_delta.proto: DocumentDelta message
+// - data_change.proto: DataChange message
+//
+// Using 'import public' to re-export all types for backward compatibility.
+// Files that import document.proto will transitively get access to all messages.
+
+import public "co/atoms/protobuf/crdt/data/crdt_data.proto";
+import public "co/atoms/protobuf/crdt/data/distributed_document.proto";
+import public "co/atoms/protobuf/crdt/data/document_sync.proto";
+import public "co/atoms/protobuf/crdt/data/document_delta.proto";
+import public "co/atoms/protobuf/crdt/data/data_change.proto";

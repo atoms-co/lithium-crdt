@@ -1,0 +1,218 @@
+syntax = "proto3";
+
+package co.atoms.protobuf.crdt.test;
+
+option java_multiple_files = true;
+
+import "google/protobuf/timestamp.proto";
+
+import "co/atoms/protobuf/crdt/data/document.proto";
+import "co/atoms/protobuf/crdt/data/options/field_options.proto";
+import "co/atoms/protobuf/crdt/data/options/message_options.proto";
+
+message TestMessage {
+  option (co.atoms.protobuf.crdt.data.options.crdt_type_name) = "TestMessage";
+  double doubleValue = 1;
+  float floatValue = 2;
+  int32 int32Value = 3;
+  int64 int64Value = 4;
+  uint32 uint32Value = 5;
+  uint64 uint64Value = 6;
+  sint32 sint32Value = 7;
+  sint64 sint64Value = 8;
+  fixed32 fixed32Value = 9;
+  fixed64 fixed64Value = 10;
+  sfixed32 sfixed32Value = 11;
+  bool boolValue = 12;
+  string stringValue = 13;
+  bytes bytesValue = 14;
+  EnumSample enumValue = 15;
+  NestedMessage nestedValue = 16;
+  oneof oneOfValue {
+    string oneOfValue1 = 17;
+    NestedMessage oneOfValue2 = 18;
+  }
+  map<string, int32> primitiveMapValue = 19;
+  map<string, NestedMessage> nestedMapValue = 20;
+  map<string, EnumSample> enumMapValue = 21;
+  repeated NestedMessage nestedListValue = 22;
+  repeated NestedMessageWithId nestedListWithIdValue = 23 [
+    (co.atoms.protobuf.crdt.data.options.crdt_id_field) = 45,
+    (co.atoms.protobuf.crdt.data.options.crdt_max_tombstones) = 10,
+    (co.atoms.protobuf.crdt.data.options.crdt_tombstone_ttl) = 500
+  ];
+  optional int32 primitiveOptionalValue = 24;
+  optional NestedMessage nestedOptionalValue = 25;
+  google.protobuf.Timestamp timestamp_value = 26;
+  NestedMessage nestedBinaryValue = 27 [
+    (co.atoms.protobuf.crdt.data.options.crdt_merge_strategy) = REPLACE
+  ];
+  EmptyType emptyValue = 28;
+  repeated EnumSample enumListValue = 29;
+  repeated int32 primitiveListValue = 30;
+  int64 counterValue = 31 [
+    (co.atoms.protobuf.crdt.data.options.crdt_merge_strategy) = COUNTER
+  ];
+  repeated int32 replacedListValue = 32 [
+    (co.atoms.protobuf.crdt.data.options.crdt_merge_strategy) = REPLACE,
+    (co.atoms.protobuf.crdt.data.options.crdt_max_tombstones) = 10,
+    (co.atoms.protobuf.crdt.data.options.crdt_tombstone_ttl) = 1000
+  ];
+  map<string, int32> replacedMapValue = 33 [
+    (co.atoms.protobuf.crdt.data.options.crdt_merge_strategy) = REPLACE
+  ];
+  map<string, int32> counterMapValue = 34 [
+    (co.atoms.protobuf.crdt.data.options.crdt_merge_strategy) = COUNTER
+  ];
+  repeated int32 counterListValue = 35 [
+    (co.atoms.protobuf.crdt.data.options.crdt_merge_strategy) = COUNTER
+  ];
+  repeated int32 nonPackedInt32 = 36 [packed = false];
+
+  // Deep nesting test fields for comprehensive coverage
+  map<int32, NestedMessage> int32KeyNestedMap = 37;
+  map<int64, NestedMessage> int64KeyNestedMap = 38;
+  map<bool, NestedMessage> boolKeyNestedMap = 39;
+  map<int32, NestedRepeatedMessage> int32KeyDeepMap = 40;
+  map<int64, NestedRepeatedMessage> int64KeyDeepMap = 41;
+}
+
+enum EnumSample {
+  UNKNOWN = 0;
+  VALUE1 = 2;
+  VALUE2 = 1;
+}
+
+message NestedMessage {
+  optional string stringValue = 42;
+  optional int32 intValue = 43;
+  repeated NestedRepeatedMessage nestedRepeatedMessage = 44;
+}
+
+message NestedMessageWithId {
+  string id = 45;
+  string stringValue = 46;
+  int32 intValue = 47;
+}
+
+message EmptyType {}
+
+message NestedRepeatedMessage {
+  map<string, NestedMessage> nestedMessageMap = 48;
+  int32 intValue = 49;
+  // Additional map types for deep nesting tests (enables depth 7+)
+  map<int32, NestedMessage> int32KeyMap = 50;
+  map<int64, NestedMessage> int64KeyMap = 51;
+}
+
+// ============================================================================
+// Nested ID field path test messages
+// These test the crdt_id_field_path option for nested ID extraction
+// ============================================================================
+
+// Similar to EventInfo - contains the unique identifier
+message TestEventInfo {
+  string event_id = 1;
+  int64 timestamp = 2;
+  string device_id = 3;
+}
+
+// Similar to DrawerEvent - has a nested message containing the ID
+message TestEvent {
+  TestEventInfo event_info = 1;
+  string event_type = 2;
+  string description = 3;
+  int32 amount = 4;
+}
+
+// Container with nested ID path: event_info.event_id (fields 1, 1)
+message TestEventContainer {
+  option (co.atoms.protobuf.crdt.data.options.crdt_type_name) = "TestEventContainer";
+
+  // Uses nested ID field path: field 1 (event_info) -> field 1 (event_id)
+  repeated TestEvent events = 1 [
+    (co.atoms.protobuf.crdt.data.options.crdt_id_field_path) = 1,
+    (co.atoms.protobuf.crdt.data.options.crdt_id_field_path) = 1,
+    (co.atoms.protobuf.crdt.data.options.crdt_max_tombstones) = 100
+  ];
+
+  string container_id = 2;
+}
+
+// Deeply nested ID test: three levels deep
+message DeepIdInfo {
+  string deep_id = 1;
+}
+
+message DeepIdWrapper {
+  DeepIdInfo info = 1;
+}
+
+message DeepIdEvent {
+  DeepIdWrapper wrapper = 1;
+  string data = 2;
+}
+
+// Container with 3-level nested ID path: wrapper.info.deep_id (fields 1, 1, 1)
+message DeepIdContainer {
+  option (co.atoms.protobuf.crdt.data.options.crdt_type_name) = "DeepIdContainer";
+
+  repeated DeepIdEvent events = 1 [
+    (co.atoms.protobuf.crdt.data.options.crdt_id_field_path) = 1,
+    (co.atoms.protobuf.crdt.data.options.crdt_id_field_path) = 1,
+    (co.atoms.protobuf.crdt.data.options.crdt_id_field_path) = 1
+  ];
+}
+
+// ============================================================================
+// Error path test messages for crdt_id_field_path validation
+// ============================================================================
+
+// Error: path traverses through a non-message (string) field
+message BadPathNonMessageIntermediate {
+  string name = 1;
+  int32 value = 2;
+}
+message BadPathNonMessageContainer {
+  option (co.atoms.protobuf.crdt.data.options.crdt_type_name) = "BadPathNonMessageContainer";
+
+  repeated BadPathNonMessageIntermediate events = 1 [
+    (co.atoms.protobuf.crdt.data.options.crdt_id_field_path) = 1,
+    (co.atoms.protobuf.crdt.data.options.crdt_id_field_path) = 1
+  ];
+}
+
+// Error: leaf field is a message type (not a valid key)
+message BadPathMessageLeaf {
+  TestEventInfo info = 1;
+}
+message BadPathMessageLeafContainer {
+  option (co.atoms.protobuf.crdt.data.options.crdt_type_name) = "BadPathMessageLeafContainer";
+
+  repeated BadPathMessageLeaf events = 1 [
+    (co.atoms.protobuf.crdt.data.options.crdt_id_field_path) = 1
+  ];
+}
+
+// Error: nonexistent field number in path
+message BadPathMissingField {
+  string name = 1;
+}
+message BadPathMissingFieldContainer {
+  option (co.atoms.protobuf.crdt.data.options.crdt_type_name) = "BadPathMissingFieldContainer";
+
+  repeated BadPathMissingField events = 1 [
+    (co.atoms.protobuf.crdt.data.options.crdt_id_field_path) = 99
+  ];
+}
+
+// Backward compat: single-element path should work identically to legacy crdt_id_field
+message SinglePathIdContainer {
+  option (co.atoms.protobuf.crdt.data.options.crdt_type_name) = "SinglePathIdContainer";
+
+  repeated NestedMessageWithId items = 1 [
+    (co.atoms.protobuf.crdt.data.options.crdt_id_field_path) = 45,
+    (co.atoms.protobuf.crdt.data.options.crdt_max_tombstones) = 10,
+    (co.atoms.protobuf.crdt.data.options.crdt_tombstone_ttl) = 500
+  ];
+}

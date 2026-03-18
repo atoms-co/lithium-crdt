@@ -1,0 +1,36 @@
+[versions]
+kotlin = "2.2.21"
+measured = "0.4.2"
+protobuf = "4.32.0"
+protobufPlugin = "0.9.5"
+wire = "5.4.0"
+junit = "5.10.2"
+coroutines = "1.10.2"
+
+[libraries]
+# Kotlin
+kotlin-test = { module = "org.jetbrains.kotlin:kotlin-test", version.ref = "kotlin" }
+kotlin-coroutines = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "coroutines" }
+kotlin-coroutines-test = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-test", version.ref = "coroutines" }
+
+# Protocol Buffers
+protobuf-java = { module = "com.google.protobuf:protobuf-java", version.ref = "protobuf" }
+
+# Wire
+wire-runtime = { module = "com.squareup.wire:wire-runtime", version.ref = "wire" }
+wire-compiler = { module = "com.squareup.wire:wire-compiler", version.ref = "wire" }
+
+# Testing
+junit-jupiter = { module = "org.junit.jupiter:junit-jupiter", version.ref = "junit" }
+junit-jupiter-engine = { module = "org.junit.jupiter:junit-jupiter-engine", version.ref = "junit" }
+junit-platform-launcher = "org.junit.platform:junit-platform-launcher:1.10.2"
+mockk = "io.mockk:mockk:1.13.10"
+truth = "com.google.truth:truth:1.4.2"
+
+# Metrics (for wire module)
+measured = { module = "io.nacular.measured:measured", version.ref = "measured" }
+
+[plugins]
+kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
+protobuf = { id = "com.google.protobuf", version.ref = "protobufPlugin" }
+wire = { id = "com.squareup.wire", version.ref = "wire" }

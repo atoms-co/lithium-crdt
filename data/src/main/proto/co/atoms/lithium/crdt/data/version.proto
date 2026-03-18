@@ -1,0 +1,52 @@
+// CRDT Version Identifier
+//
+// Represents a unique identifier for when and by whom a CRDT change was made,
+// enabling deterministic conflict resolution and efficient delta computation.
+
+syntax = "proto3";
+
+package co.atoms.lithium.crdt.data;
+
+option java_multiple_files = true;
+
+/**
+ * Concrete version identifier for CRDT operations.
+ *
+ * A Version uniquely identifies when and by whom a change was made, enabling
+ * deterministic conflict resolution and efficient delta computation.
+ *
+ * COMPONENTS:
+ * - timestamp: Physical time when the change occurred (e.g., wall clock time,
+ *   Lamport clock, or other timestamp source). Used as the primary ordering
+ *   mechanism for last-write-wins conflict resolution.
+ *
+ * - actor_id: Unique identifier for the actor (device, user, or replica) that
+ *   performed the change. Ensures tie-breaking when timestamps are equal.
+ *
+ * - actor_version: Monotonically incrementing counter maintained by each actor.
+ *   Each time an actor makes a change, it increments its version counter.
+ *   This enables:
+ *   - Efficient delta computation (changes since actor_version N)
+ *   - Detection of missing changes in a sequence
+ *   - Actor-specific version tracking for sync optimization
+ *
+ * VERSION COMPARISON:
+ * Versions are compared lexicographically: first by timestamp, then by actor_id,
+ * then by actor_version. This provides a total ordering for conflict resolution.
+ *
+ * DELTA COMPUTATION:
+ * The actor_version enables efficient delta queries: "give me all changes from
+ * actor X since version N". This is crucial for incremental sync and reducing
+ * bandwidth in distributed systems.
+ *
+ * Example progression for a single actor:
+ *   Version { timestamp: 1000, actor_id: 42, actor_version: 1 }  // First change
+ *   Version { timestamp: 1050, actor_id: 42, actor_version: 2 }  // Second change
+ *   Version { timestamp: 1100, actor_id: 42, actor_version: 3 }  // Third change
+ *   // Delta from version 2 to current would include only the third change
+ */
+message Version {
+  int64 timestamp = 1;
+  int64 actor_id = 2;
+  int64 actor_version = 3;
+}

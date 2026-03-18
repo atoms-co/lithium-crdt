@@ -1,0 +1,77 @@
+syntax = "proto3";
+
+package co.atoms.lithium.crdt.data;
+
+option java_multiple_files = true;
+
+import "google/protobuf/timestamp.proto";
+import "co/atoms/lithium/crdt/data/data_change.proto";
+
+/*
+ * Multi-actor synchronization payload for bringing devices up to speed.
+ *
+ * DocumentSync represents a collection of changes from multiple actors across
+ * a range of versions, designed to efficiently synchronize a device that has
+ * been offline or needs to catch up on many changes.
+ *
+ * MULTI-ACTOR RANGE SYNCHRONIZATION:
+ * DocumentSync can contain changes from multiple actors across different version ranges:
+ * - Squashed/compressed representation of many individual DocumentDelta operations
+ * - Optimized for bulk synchronization rather than real-time collaboration
+ * - May represent the final state after conflict resolution between multiple actors
+ *
+ * SYNCHRONIZATION SCENARIOS:
+ * - Device comes online after extended offline period
+ * - Initial synchronization of new device joining document
+ * - Batch synchronization during low-bandwidth periods
+ * - Recovery synchronization after network partition
+ *
+ * VERSION RANGE SEMANTICS:
+ * The version_ranges map indicates what actor versions are covered in this sync:
+ * - Key: Actor ID
+ * - Value: VersionRange indicating from/to versions included
+ * - Receiving device can determine what changes are covered
+ *
+ * Example sync bringing device up to speed on document with changes from 3 actors:
+ *   DocumentSync {
+ *     document_id: "user123"
+ *     version_ranges: {
+ *       1001: VersionRange{from: 5, to: 10},  // Actor 1001 versions 5-10
+ *       1002: VersionRange{from: 1, to: 3},   // Actor 1002 versions 1-3
+ *       1003: VersionRange{from: 1, to: 1}    // Actor 1003 version 1
+ *     }
+ *     changes: [
+ *       // Potentially squashed/optimized changes representing final state
+ *       // after all conflicts resolved between the actors in version ranges
+ *     ]
+ *   }
+ */
+message DocumentSync {
+  // Document identifier that this sync applies to
+  string document_id = 1;
+
+  // Version ranges covered by this sync for each actor
+  // Key: Actor ID, Value: Range of versions from that actor included in this sync
+  map<int64, VersionRange> version_ranges = 2;
+
+  // List of data changes representing the cumulative effect of all changes
+  // in the version ranges - may be optimized/squashed representation
+  repeated DataChange changes = 3;
+
+  // Timestamp when this sync was created
+  google.protobuf.Timestamp created = 4;
+}
+
+/*
+ * Version range specification for multi-actor synchronization.
+ *
+ * Represents a contiguous range of versions for a single actor that are
+ * included in a DocumentSync operation.
+ */
+message VersionRange {
+  // Starting version number (inclusive)
+  int64 from_version = 1;
+
+  // Ending version number (inclusive)
+  int64 to_version = 2;
+}

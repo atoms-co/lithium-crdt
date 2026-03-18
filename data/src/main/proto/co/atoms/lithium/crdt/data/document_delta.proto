@@ -1,0 +1,78 @@
+syntax = "proto3";
+
+package co.atoms.lithium.crdt.data;
+
+option java_multiple_files = true;
+
+import "google/protobuf/timestamp.proto";
+import "co/atoms/lithium/crdt/data/data_change.proto";
+
+/*
+ * Delta-based document synchronization payload containing incremental changes.
+ *
+ * DocumentDelta represents a single atomic change event from one actor that can be applied
+ * to update a document incrementally. This is more efficient for real-time collaboration
+ * where individual user actions need to be transmitted as they occur.
+ *
+ * SINGLE-ACTOR ATOMIC CHANGE:
+ * Each DocumentDelta represents one logical change operation performed by a single actor:
+ * - All changes in the delta have the same actor ID and form a coherent operation
+ * - Changes represent parts of a single user action (e.g., updating multiple related fields)
+ * - Version represents the single version number for this actor's change event
+ *
+ * DELTA SYNCHRONIZATION WORKFLOW:
+ * 1. User performs action, generating multiple related DataChange entries
+ * 2. DocumentDelta is created with single actor version and list of changes
+ * 3. Delta is transmitted to other devices in real-time
+ * 4. Receiving device applies changes using merge logic
+ * 5. Document state and version information is updated incrementally
+ *
+ * Example delta for user updating profile (email + display name in one action):
+ *   DocumentDelta {
+ *     document_id: "user123"
+ *     actor_id: 1001
+ *     version: 6
+ *     changes: [
+ *       DataChange {
+ *         data: "john.doe@newcompany.com"
+ *         version_change: VersionChange {
+ *           path: [PathComponent{field_number: 2}]  // email field
+ *           node: VersionNode{version: [1001, 6]}
+ *         }
+ *       },
+ *       DataChange {
+ *         data: "John Doe"
+ *         version_change: VersionChange {
+ *           path: [PathComponent{field_number: 3}]  // display_name field
+ *           node: VersionNode{version: [1001, 6]}
+ *         }
+ *       }
+ *     ]
+ *   }
+ */
+message DocumentDelta {
+  // Document identifier that this delta applies to
+  string document_id = 1;
+
+  // Actor that performed this change operation
+  int64 actor_id = 2;
+
+  // Version number for this actor's change event
+  // All changes in this delta will reference this same actor version
+  int64 version = 3;
+
+  // List of individual data changes included in this atomic operation
+  // Each change updates a specific path but all are part of the same user action
+  repeated DataChange changes = 4;
+
+  // Timestamp when this delta was created
+  google.protobuf.Timestamp created = 5;
+
+  // CRDT data type name that this delta applies to
+  // derived from the crdt_type_name message options
+  string crdt_type_name = 6;
+
+  // Baseline actor version vector known to the sender at the time of this delta
+  // This is the actor versions that the changes are based upon
+  map<int64, int64> baseline_version_vector = 7;
+}

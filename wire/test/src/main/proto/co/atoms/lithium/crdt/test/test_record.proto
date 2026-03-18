@@ -1,0 +1,64 @@
+syntax = "proto3";
+
+package co.atoms.lithium.crdt.test;
+
+option java_multiple_files = true;
+
+import "co/atoms/lithium/crdt/data/options/field_options.proto";
+import "co/atoms/lithium/crdt/data/options/message_options.proto";
+
+enum TestRecordStatus {
+  RECORD_UNKNOWN = 0;
+  RECORD_DRAFT = 1;
+  RECORD_ACTIVE = 2;
+  RECORD_REVIEW = 3;
+  RECORD_CLOSED = 4;
+  RECORD_ARCHIVED = 5;
+}
+
+message TestContactInfo {
+  string name = 1;
+  string phone = 2;
+  string email = 3;
+}
+
+message TestEntry {
+  string entry_id = 1;
+  string label = 2;
+  int32 count = 3;
+  int64 amount = 4;
+  map<string, string> attributes = 5;
+  string description = 6;
+}
+
+message TestSnapshot {
+  string type = 1;
+  int64 amount = 2;
+  int64 adjustment = 3;
+  string reference_id = 4;
+}
+
+message TestRecord {
+  option (co.atoms.lithium.crdt.data.options.crdt_type_name) = "TestRecord";
+
+  string record_id = 1;
+  TestRecordStatus status = 2;
+  TestContactInfo contact = 3;
+
+  repeated TestEntry entries = 4 [
+    (co.atoms.lithium.crdt.data.options.crdt_id_field) = 1,
+    (co.atoms.lithium.crdt.data.options.crdt_max_tombstones) = 50
+  ];
+
+  map<string, string> tags = 5;
+
+  int64 quantity = 6;
+  int64 adjustment = 7;
+  int64 total = 8;
+
+  TestSnapshot snapshot = 9 [
+    (co.atoms.lithium.crdt.data.options.crdt_merge_strategy) = REPLACE
+  ];
+
+  string notes = 10;
+}

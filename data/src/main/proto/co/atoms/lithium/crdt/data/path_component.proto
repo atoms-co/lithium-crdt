@@ -1,0 +1,122 @@
+// CRDT Path Navigation Component
+//
+// Defines a single step in navigating through a CRDT document structure,
+// enabling precise addressing of any location within nested protobuf messages.
+
+syntax = "proto3";
+
+package co.atoms.lithium.crdt.data;
+
+option java_multiple_files = true;
+
+/*
+ * Single navigation step within a CRDT document structure.
+ *
+ * PathComponent represents one segment of a path from the document root to a
+ * specific field, map entry, or list element. Multiple PathComponents are
+ * combined in sequence to form complete paths for addressing any location
+ * in a nested protobuf structure.
+ *
+ * PATH CONSTRUCTION:
+ * A complete path is an ordered sequence of PathComponents, where each component
+ * navigates one level deeper into the document structure:
+ *
+ *   [root] → field_number → map_key → field_number → ...
+ *
+ * PATH TYPES AND USAGE:
+ * The oneof 'key' field determines the navigation type:
+ *
+ * - field_number: Navigate into a message field by its protobuf field number
+ *   Example: Access field 'name' (field 2) in a User message
+ *   PathComponent { field_number: 2 }
+ *
+ * - string_key: Navigate into a map<string, V> by key
+ *   Example: Access tags["role"] in a map<string, string> tags field
+ *   PathComponent { string_key: "role" }
+ *
+ * - int32_key: Navigate into a map<int32, V> by key
+ *   Example: Access inventory[42] in a map<int32, Item> inventory field
+ *   PathComponent { int32_key: 42 }
+ *
+ * - int64_key: Navigate into a map<int64, V> by key
+ *   Example: Access orders[1234567890] in a map<int64, Order> orders field
+ *   PathComponent { int64_key: 1234567890 }
+ *
+ * - bool_key: Navigate into a map<bool, V> by key
+ *   Example: Access flags[true] in a map<bool, string> flags field
+ *   PathComponent { bool_key: true }
+ *
+ * - repeated_index: Navigate into a repeated field by index
+ *   Example: Access items[0] in a repeated Item items field
+ *   PathComponent { repeated_index: 0 }
+ *
+ * COMPLETE PATH EXAMPLES:
+ *
+ * Example 1: Access user.address.city (nested message fields)
+ *   message User { Address address = 3; }
+ *   message Address { string city = 2; }
+ *   Path: [
+ *     PathComponent { field_number: 3 },  // address field
+ *     PathComponent { field_number: 2 }   // city field
+ *   ]
+ *
+ * Example 2: Access order.items["SKU123"].quantity (map then field)
+ *   message Order { map<string, LineItem> items = 5; }
+ *   message LineItem { int32 quantity = 1; }
+ *   Path: [
+ *     PathComponent { field_number: 5 },       // items map field
+ *     PathComponent { string_key: "SKU123" },  // map entry by key
+ *     PathComponent { field_number: 1 }        // quantity field
+ *   ]
+ *
+ * Example 3: Access config.servers[0].hostname (list then field)
+ *   message Config { repeated Server servers = 4; }
+ *   message Server { string hostname = 1; }
+ *   Path: [
+ *     PathComponent { field_number: 4 },    // servers list field
+ *     PathComponent { repeated_index: 0 },  // first element
+ *     PathComponent { field_number: 1 }     // hostname field
+ *   ]
+ *
+ * USAGE IN CRDT OPERATIONS:
+ * PathComponents are used in:
+ * - VersionChange: Specifies where a version update applies
+ * - DataChange: Specifies where a data modification applies
+ * - Delta sync: Identifies specific locations for incremental updates
+ *
+ * @see VersionChange for combining paths with version information
+ * @see DataChange for combining paths with data modifications
+ */
+message PathComponent {
+  oneof key {
+    // Navigate into a message field by protobuf field number.
+    // Used for accessing fields within message types.
+    // Example: field_number: 2 accesses the field defined as "... = 2;" in proto
+    int32 field_number = 1;
+
+    // Navigate into a map<string, V> by string key.
+    // Used for accessing entries in string-keyed maps.
+    // Example: string_key: "admin" accesses map["admin"]
+    string string_key = 2;
+
+    // Navigate into a map<int32, V> by int32 key.
+    // Used for accessing entries in int32-keyed maps.
+    // Example: int32_key: 42 accesses map[42]
+    int32 int32_key = 3;
+
+    // Navigate into a map<int64, V> by int64 key.
+    // Used for accessing entries in int64-keyed maps.
+    // Example: int64_key: 1234567890 accesses map[1234567890]
+    int64 int64_key = 4;
+
+    // Navigate into a map<bool, V> by boolean key.
+    // Used for accessing entries in boolean-keyed maps.
+    // Example: bool_key: true accesses map[true]
+    bool bool_key = 5;
+
+    // Navigate into a repeated field by zero-based index.
+    // Used for accessing elements in repeated/list fields.
+    // Example: repeated_index: 0 accesses the first element
+    int32 repeated_index = 6;
+  }
+}

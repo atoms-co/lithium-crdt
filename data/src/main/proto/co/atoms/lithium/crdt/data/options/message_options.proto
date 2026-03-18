@@ -1,0 +1,12 @@
+syntax = "proto3";
+
+package co.atoms.lithium.crdt.data.options;
+
+import "google/protobuf/descriptor.proto";
+
+extend google.protobuf.MessageOptions {
+  // The crdt type name associated with this message
+  // Used as a durable key to identify the type of data being stored as a crdt.
+  // This value should be globally unique across all crdt message types and should not change once assigned.
+  string crdt_type_name = 9200;
+}

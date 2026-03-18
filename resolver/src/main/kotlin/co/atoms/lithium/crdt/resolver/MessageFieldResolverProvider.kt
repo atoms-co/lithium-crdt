@@ -1,0 +1,192 @@
+package co.atoms.lithium.crdt.resolver
+
+import co.atoms.lithium.crdt.resolver.decoder.CrdtPathChangeDecoder
+import co.atoms.lithium.crdt.resolver.delta.CrdtDeltaResolver
+import co.atoms.lithium.crdt.resolver.descriptor.CollectionType
+import co.atoms.lithium.crdt.resolver.descriptor.KeyType
+import co.atoms.lithium.crdt.resolver.descriptor.MessageFieldDescriptor
+import co.atoms.lithium.crdt.resolver.descriptor.MessageFieldMergeStrategy
+import co.atoms.lithium.crdt.resolver.descriptor.MessageFieldMergeStrategy.INT_COUNTER
+import co.atoms.lithium.crdt.resolver.descriptor.MessageFieldMergeStrategy.LONG_COUNTER
+import co.atoms.lithium.crdt.resolver.descriptor.MessageFieldMergeStrategy.REPLACE
+import co.atoms.lithium.crdt.resolver.descriptor.MessageFieldResolver
+import co.atoms.lithium.crdt.resolver.descriptor.ValueType
+import co.atoms.lithium.crdt.resolver.incoming.partial.CrdtIncomingChangeResolver
+import co.atoms.lithium.crdt.resolver.local.CrdtLocalResolver
+import co.atoms.lithium.crdt.resolver.version.VersionTreeResolver
+import java.util.concurrent.ConcurrentHashMap
+
+object MessageFieldResolverProvider {
+    private val resolverCache = ConcurrentHashMap<Any, CrdtResolver<*, *, *, *>>()
+
+    fun <M, B, N, V, D : MessageFieldDescriptor<M, B, Any>, C> messageFieldResolver(
+        descriptor: D,
+        versionTreeResolver: VersionTreeResolver<N, V, C>,
+        messageResolverFactory: () -> CrdtResolver<Any, N, V, C>,
+    ): MessageFieldResolver<M, B, Any, N, V, C> {
+        val valueResolver = descriptor.toResolver(
+            valueResolver = if (descriptor.valueType == ValueType.MESSAGE &&
+                descriptor.mergeStrategy != REPLACE
+            ) {
+                messageResolverFactory()
+            } else {
+                createValueResolver(descriptor, versionTreeResolver)
+            },
+            versionTreeResolver = versionTreeResolver,
+        )
+
+        @Suppress("UNCHECKED_CAST")
+        return MessageFieldResolver(
+            binding = descriptor,
+            localResolver = valueResolver as CrdtLocalResolver<Any, N, V, C>,
+            incomingResolver = valueResolver as CrdtIncomingChangeResolver<Any, N, V, C>,
+            deltaResolver = valueResolver as CrdtDeltaResolver<Any, N, V, C>,
+            changeDecoder = valueResolver as CrdtPathChangeDecoder<Any, N, V, C>,
+        )
+    }
+
+    @Suppress("UNCHECKED_CAST")
+    private fun <N, V, C> createValueResolver(
+        descriptor: MessageFieldDescriptor<*, *, Any>,
+        versionTreeResolver: VersionTreeResolver<N, V, C>,
+    ): CrdtResolver<Any, N, V, C> {
+        val encoder = if (descriptor.mergeStrategy == REPLACE) descriptor.encoder else descriptor.valueEncoder
+        val decoder = if (descriptor.mergeStrategy == REPLACE) descriptor.decoder else descriptor.valueDecoder
+
+        fun buildResolver(): CrdtResolver<*, *, *, *> = when (descriptor.mergeStrategy) {
+            INT_COUNTER -> IntCounterResolver(
+                encoder = descriptor.valueEncoder,
+                decoder = descriptor.valueDecoder as (ByteArray) -> Int,
+                versionTreeResolver = versionTreeResolver,
+            )
+            LONG_COUNTER -> LongCounterResolver(
+                encoder = descriptor.valueEncoder,
+                decoder = descriptor.valueDecoder as (ByteArray) -> Long,
+                versionTreeResolver = versionTreeResolver,
+            )
+            else -> SingleValueResolver(
+                encoder = encoder,
+                decoder = decoder,
+                versionTreeResolver = versionTreeResolver,
+            )
+        }
+
+        // REPLACE uses the full typeId (which includes collectionType) because REPLACE
+        // lists and REPLACE maps have different wire formats and must not share resolver
+        // instances. Non-REPLACE fields share by valueTypeId since collection wrapping is
+        // handled by the outer collection resolver.
+        val cacheKey = SingleCacheKey(
+            type = if (descriptor.mergeStrategy == REPLACE) descriptor.typeId else descriptor.valueTypeId,
+            optional = false,
+        )
+
+        val resolver = resolverCache.getOrPut(cacheKey) {
+            buildResolver()
+        } as CrdtResolver<Any, N, V, C>
+
+        if (descriptor.valueType == ValueType.OPTIONAL) {
+            return resolverCache.getOrPut(SingleCacheKey(type = descriptor.typeId, optional = true)) {
+                OptionalAnyValueResolver(
+                    decoder = decoder,
+                    encoder = descriptor.valueEncoder,
+                    valueResolver = resolver,
+                    versionTreeResolver = versionTreeResolver,
+                )
+            } as CrdtResolver<Any, N, V, C>
+        }
+
+        return resolver
+    }
+
+    fun <N, V, C> MessageFieldDescriptor<*, *, *>.toResolver(
+        valueResolver: CrdtResolver<Any, N, V, C>,
+        versionTreeResolver: VersionTreeResolver<N, V, C>,
+    ): CrdtResolver<Any, N, V, C> {
+        val collectionType = collectionType?.takeIf {
+            mergeStrategy != REPLACE
+        } ?: return valueResolver
+
+        @Suppress("UNCHECKED_CAST")
+        return resolverCache.getOrPut(typeId) {
+            when (collectionType) {
+                is CollectionType.Map -> {
+                    collectionType.toAnyMapResolver(
+                        encoder = encoder,
+                        decoder = decoder,
+                        valueResolver = valueResolver,
+                        versionTreeResolver = versionTreeResolver,
+                    )
+                }
+                is CollectionType.RepeatedId -> {
+                    RepeatedIdResolver(
+                        decoder = decoder as (ByteArray) -> List<Any>,
+                        encoder = encoder,
+                        keyTransformer = collectionType.repeatedKeyTransformer,
+                        mapResolver = collectionType.mapType.toAnyMapResolver(
+                            encoder = encoder,
+                            decoder = decoder,
+                            valueResolver = valueResolver,
+                            versionTreeResolver = versionTreeResolver,
+                        ),
+                        versionTreeResolver = versionTreeResolver,
+                    )
+                }
+                is CollectionType.Repeated -> {
+                    RepeatedResolver(
+                        decoder = decoder as (ByteArray) -> List<Any>,
+                        encoder = encoder,
+                        valueResolver = valueResolver,
+                        versionTreeResolver = versionTreeResolver,
+                    )
+                }
+            }
+        } as CrdtResolver<Any, N, V, C>
+    }
+
+    @Suppress("UNCHECKED_CAST")
+    fun <N, V, C> CollectionType.Map.toAnyMapResolver(
+        encoder: (Any) -> ByteArray,
+        decoder: (ByteArray) -> Any,
+        valueResolver: CrdtResolver<Any, N, V, C>,
+        versionTreeResolver: VersionTreeResolver<N, V, C>,
+    ): CrdtResolver<Map<Any, Any>, N, V, C> =
+        when (keyType) {
+            KeyType.BOOL ->
+                BooleanMapResolver(
+                    config = this,
+                    decoder = decoder as (ByteArray) -> Map<Boolean, Any>,
+                    encoder = encoder,
+                    valueResolver = valueResolver,
+                    versionTreeResolver = versionTreeResolver,
+                )
+            KeyType.INT ->
+                IntMapResolver(
+                    config = this,
+                    decoder = decoder as (ByteArray) -> Map<Int, Any>,
+                    encoder = encoder,
+                    valueResolver = valueResolver,
+                    versionTreeResolver = versionTreeResolver,
+                )
+            KeyType.LONG ->
+                LongMapResolver(
+                    config = this,
+                    decoder = decoder as (ByteArray) -> Map<Long, Any>,
+                    encoder = encoder,
+                    valueResolver = valueResolver,
+                    versionTreeResolver = versionTreeResolver,
+                )
+            KeyType.STRING ->
+                StringMapResolver(
+                    config = this,
+                    decoder = decoder as (ByteArray) -> Map<String, Any>,
+                    encoder = encoder,
+                    valueResolver = valueResolver,
+                    versionTreeResolver = versionTreeResolver,
+                )
+        } as CrdtResolver<Map<Any, Any>, N, V, C>
+
+    private data class SingleCacheKey(
+        private val type: Any,
+        private val optional: Boolean,
+    )
+}

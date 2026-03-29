@@ -255,8 +255,8 @@ class ProtoCrdtDeltaResolverTest {
             incomingVersionVector = incomingDelta.actors.versionVectorMap,
         )
 
-        // Then - incoming changes should be captured
-        assertThat(delta.changes.size).isEqualTo(25)
+        // Only fields with different values between local and incoming should emit changes
+        assertThat(delta.changes.size).isEqualTo(7)
 
         val changesByField = delta.changes.associateBy { it.pathComponents.first() }
 

@@ -146,4 +146,104 @@ class AnyValueIncomingResolverTest {
         assertEquals(incomingVersion, result.node?.version, "Should create incoming node")
         assertEquals(ResolutionStrategy.INCOMING, result.resolution, "Should resolve as incoming")
     }
+
+    @Test
+    fun `incoming version higher, same value - no change entry`() {
+        val ctx = ResolutionDeltaContext<VersionNode, String>()
+        val localVersion = Version(1L, 1000L, 1000L)
+        val incomingVersion = Version(1L, 1100L, 1100L)
+
+        val result = resolver.resolveConflict(
+            localValue = "same",
+            localNode = VersionNode(version = localVersion),
+            localVersion = localVersion,
+            incomingValue = "same",
+            incomingNode = VersionNode(version = incomingVersion),
+            incomingVersion = incomingVersion,
+            context = ctx,
+        )
+
+        assertEquals(ResolutionStrategy.INCOMING, result.resolution)
+        assertEquals(0, ctx.result.size, "No change entry when values are identical")
+    }
+
+    @Test
+    fun `incoming version higher, different value - change entry added`() {
+        val ctx = ResolutionDeltaContext<VersionNode, String>()
+        val localVersion = Version(1L, 1000L, 1000L)
+        val incomingVersion = Version(1L, 1100L, 1100L)
+
+        val result = resolver.resolveConflict(
+            localValue = "old",
+            localNode = VersionNode(version = localVersion),
+            localVersion = localVersion,
+            incomingValue = "new",
+            incomingNode = VersionNode(version = incomingVersion),
+            incomingVersion = incomingVersion,
+            context = ctx,
+        )
+
+        assertEquals(ResolutionStrategy.INCOMING, result.resolution)
+        assertEquals(1, ctx.result.size, "Change entry added when values differ")
+    }
+
+    @Test
+    fun `incoming version higher, both null - no change entry`() {
+        val ctx = ResolutionDeltaContext<VersionNode, String>()
+        val localVersion = Version(1L, 1000L, 1000L)
+        val incomingVersion = Version(1L, 1100L, 1100L)
+
+        val result = resolver.resolveConflict(
+            localValue = null,
+            localNode = VersionNode(version = localVersion),
+            localVersion = localVersion,
+            incomingValue = null,
+            incomingNode = VersionNode(version = incomingVersion),
+            incomingVersion = incomingVersion,
+            context = ctx,
+        )
+
+        assertEquals(ResolutionStrategy.INCOMING, result.resolution)
+        assertEquals(0, ctx.result.size, "No change entry when both values are null")
+    }
+
+    @Test
+    fun `incoming version higher, null to non-null - change entry added`() {
+        val ctx = ResolutionDeltaContext<VersionNode, String>()
+        val localVersion = Version(1L, 1000L, 1000L)
+        val incomingVersion = Version(1L, 1100L, 1100L)
+
+        val result = resolver.resolveConflict(
+            localValue = null,
+            localNode = VersionNode(version = localVersion),
+            localVersion = localVersion,
+            incomingValue = "new",
+            incomingNode = VersionNode(version = incomingVersion),
+            incomingVersion = incomingVersion,
+            context = ctx,
+        )
+
+        assertEquals(ResolutionStrategy.INCOMING, result.resolution)
+        assertEquals(1, ctx.result.size, "Change entry added for null to non-null")
+    }
+
+    @Test
+    fun `incoming version higher, non-null to null - change entry added`() {
+        val ctx = ResolutionDeltaContext<VersionNode, String>()
+        val localVersion = Version(1L, 1000L, 1000L)
+        val incomingVersion = Version(1L, 1100L, 1100L)
+
+        val result = resolver.resolveConflict(
+            localValue = "old",
+            localNode = VersionNode(version = localVersion),
+            localVersion = localVersion,
+            incomingValue = null,
+            incomingNode = VersionNode(version = incomingVersion),
+            incomingVersion = incomingVersion,
+            context = ctx,
+        )
+
+        assertEquals(ResolutionStrategy.INCOMING, result.resolution)
+        assertEquals(1, ctx.result.size, "Change entry added for non-null to null")
+    }
 }

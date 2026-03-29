@@ -88,7 +88,7 @@ interface CounterIncomingResolver<T, N, V, C> : CrdtIncomingResolver<T, N, V, C>
                 }
             }.also {
                 // Track changes for incoming or merged resolutions
-                if (it.resolution == ResolutionStrategy.INCOMING || it.resolution == ResolutionStrategy.MERGED_VALUES)
+                if ((it.resolution == ResolutionStrategy.INCOMING || it.resolution == ResolutionStrategy.MERGED_VALUES) && it.value != localValue)
                     context.addChange(
                         newValue = it.value,
                         encoder = encoder,

@@ -31,11 +31,13 @@ interface SingleValueIncomingResolver<T, N, V, C> : CrdtIncomingResolver<T, N, V
                         resolution = INCOMING,
                     )
                         .also {
-                            context.addChange(
-                                newValue = incomingValue,
-                                encoder = encoder,
-                                versionNode = it.node ?: createVersionNode(incomingVersion),
-                            )
+                            if (incomingValue != localValue) {
+                                context.addChange(
+                                    newValue = incomingValue,
+                                    encoder = encoder,
+                                    versionNode = it.node ?: createVersionNode(incomingVersion),
+                                )
+                            }
                         }
                 else ->
                     NodeMergeResult(

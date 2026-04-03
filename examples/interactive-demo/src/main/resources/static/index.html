@@ -1,0 +1,476 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>lithium-crdt Interactive Demo</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#111827;--bg2:#1f2937;--bg3:#374151;--border:#4b5563;
+  --text:#f9fafb;--text2:#9ca3af;--text3:#6b7280;
+  --accent-a:#3b82f6;--accent-b:#10b981;--accent-c:#f59e0b;
+  --red:#ef4444;--green:#10b981;--blue:#3b82f6;--orange:#f59e0b;--gray:#6b7280;
+  --mono:'SF Mono','Cascadia Code','Fira Code',Consolas,monospace;
+  --sans:system-ui,-apple-system,sans-serif;
+  --radius:8px;
+}
+html{font-size:14px}
+body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:100vh;display:flex;flex-direction:column}
+button{cursor:pointer;border:none;font-family:inherit;font-size:inherit;border-radius:var(--radius);padding:6px 14px;transition:all .15s}
+input,textarea,select{background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:var(--radius);padding:6px 10px;font-family:var(--mono);font-size:.85rem;width:100%;transition:border-color .15s}
+input:focus,textarea:focus{outline:none;border-color:var(--blue)}
+textarea{resize:vertical;min-height:60px}
+
+.header{background:var(--bg2);border-bottom:1px solid var(--border);padding:16px 24px;display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+.header h1{font-size:1.3rem;font-family:var(--mono);font-weight:700;letter-spacing:-.5px}
+.header h1 span{color:var(--blue)}
+.header p{color:var(--text2);font-size:.85rem;flex:1;min-width:200px}
+.header-actions{display:flex;gap:8px}
+.btn-reset{background:var(--bg3);color:var(--text)}
+.btn-reset:hover{background:var(--red);color:#fff}
+.btn-sync-all{background:var(--blue);color:#fff}
+.btn-sync-all:hover{opacity:.85}
+
+.main{flex:1;display:flex;flex-direction:column;overflow:hidden}
+.nodes-row{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--border);flex:1;overflow:hidden}
+@media(max-width:900px){.nodes-row{grid-template-columns:1fr;overflow:auto}}
+
+.node-panel{background:var(--bg2);display:flex;flex-direction:column;overflow:hidden}
+.node-panel.offline{opacity:.5}
+.node-header{padding:12px 16px;display:flex;align-items:center;gap:12px;border-bottom:1px solid var(--border)}
+.node-name{font-family:var(--mono);font-weight:700;font-size:1rem}
+.node-panel[data-node="node-a"] .node-name{color:var(--accent-a)}
+.node-panel[data-node="node-b"] .node-name{color:var(--accent-b)}
+.node-panel[data-node="node-c"] .node-name{color:var(--accent-c)}
+.toggle{position:relative;width:40px;height:22px;background:var(--bg3);border-radius:11px;cursor:pointer;transition:background .2s;margin-left:auto;flex-shrink:0}
+.toggle.on{background:var(--green)}
+.toggle::after{content:'';position:absolute;top:3px;left:3px;width:16px;height:16px;background:#fff;border-radius:50%;transition:transform .2s}
+.toggle.on::after{transform:translateX(18px)}
+.toggle-label{font-size:.75rem;color:var(--text2)}
+
+.node-body{flex:1;overflow-y:auto;padding:0}
+.section{border-bottom:1px solid var(--border)}
+.section-head{padding:8px 16px;font-size:.75rem;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--text3);cursor:pointer;display:flex;align-items:center;gap:6px;user-select:none}
+.section-head::before{content:'▸';transition:transform .15s;display:inline-block;font-size:.65rem}
+.section-head.open::before{transform:rotate(90deg)}
+.section-content{padding:0 16px 12px}
+
+.field-row{display:flex;flex-direction:column;gap:3px;margin-bottom:8px}
+.field-label{font-size:.7rem;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.3px}
+.field-row input,.field-row textarea{font-size:.8rem}
+
+.btn-apply{width:100%;padding:8px;font-weight:600;font-size:.8rem;margin-top:4px}
+.node-panel[data-node="node-a"] .btn-apply{background:var(--accent-a);color:#fff}
+.node-panel[data-node="node-b"] .btn-apply{background:var(--accent-b);color:#fff}
+.node-panel[data-node="node-c"] .btn-apply{background:var(--accent-c);color:#fff}
+.btn-apply:hover{opacity:.85}
+.btn-apply.success{animation:applysuccess .6s ease}
+@keyframes applysuccess{0%{filter:brightness(1)}30%{filter:brightness(1.4)}100%{filter:brightness(1)}}
+
+.tags-list{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px}
+.tag-chip{background:var(--bg3);border-radius:4px;padding:2px 8px;font-size:.75rem;font-family:var(--mono);display:flex;align-items:center;gap:4px}
+.tag-chip .remove{cursor:pointer;color:var(--red);font-weight:700;font-size:.85rem}
+.tag-add{display:flex;gap:4px}
+.tag-add input{flex:1;font-size:.75rem;padding:4px 8px}
+.tag-add button{font-size:.75rem;padding:4px 10px;background:var(--bg3);color:var(--text)}
+
+.vtree{font-family:var(--mono);font-size:.75rem;line-height:1.6}
+.vtree-node{padding-left:16px;border-left:1px solid var(--border)}
+.vtree-key{color:var(--blue)}
+.vtree-ts{color:var(--orange);font-size:.7rem}
+.vtree-actor{color:var(--green);font-size:.7rem}
+.vtree-line{cursor:pointer}
+.vtree-line:hover{background:rgba(255,255,255,.03)}
+.vtree-collapsed .vtree-children{display:none}
+
+.actors-table{font-family:var(--mono);font-size:.75rem;width:100%}
+.actors-table td,.actors-table th{padding:3px 8px;text-align:left}
+.actors-table th{color:var(--text3);font-weight:600}
+.actor-local{color:var(--green)}
+
+.event-list{max-height:140px;overflow-y:auto;font-size:.75rem;font-family:var(--mono)}
+.event-item{padding:3px 0;border-bottom:1px solid rgba(75,85,99,.3);display:flex;gap:8px;align-items:baseline}
+.event-time{color:var(--text3);flex-shrink:0}
+.event-type{font-weight:600;flex-shrink:0;padding:1px 6px;border-radius:3px;font-size:.65rem;text-transform:uppercase}
+.event-type.LOCAL_WRITE{background:rgba(59,130,246,.2);color:var(--blue)}
+.event-type.SYNC{background:rgba(16,185,129,.2);color:var(--green)}
+.event-desc{color:var(--text2)}
+
+.sync-bar{background:var(--bg2);border-top:1px solid var(--border);padding:10px 24px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.sync-bar-label{font-size:.8rem;color:var(--text2);font-weight:600;margin-right:4px}
+.btn-sync{background:var(--bg3);color:var(--text);font-size:.8rem;padding:5px 12px;font-family:var(--mono)}
+.btn-sync:hover:not(:disabled){background:var(--bg);border:1px solid var(--text3)}
+.btn-sync:disabled{opacity:.35;cursor:not-allowed}
+.btn-sync .arrow{font-size:.9rem}
+
+.toast-container{position:fixed;top:16px;right:16px;z-index:999;display:flex;flex-direction:column;gap:8px}
+.toast{padding:10px 18px;border-radius:var(--radius);font-size:.85rem;font-family:var(--mono);animation:toastin .3s ease;box-shadow:0 4px 20px rgba(0,0,0,.4)}
+.toast.NO_CHANGE{background:var(--bg3);color:var(--text2)}
+.toast.LOCAL{background:rgba(59,130,246,.9);color:#fff}
+.toast.INCOMING{background:rgba(245,158,11,.9);color:#000}
+.toast.MERGED_VALUES{background:rgba(16,185,129,.9);color:#fff}
+@keyframes toastin{from{transform:translateX(100px);opacity:0}to{transform:translateX(0);opacity:1}}
+
+.badge{display:inline-block;padding:1px 6px;border-radius:3px;font-size:.65rem;font-weight:700;text-transform:uppercase;font-family:var(--mono)}
+.badge.NO_CHANGE{background:rgba(107,114,128,.2);color:var(--gray)}
+.badge.LOCAL{background:rgba(59,130,246,.2);color:var(--blue)}
+.badge.INCOMING{background:rgba(245,158,11,.2);color:var(--orange)}
+.badge.MERGED_VALUES{background:rgba(16,185,129,.2);color:var(--green)}
+
+.empty-state{color:var(--text3);font-style:italic;font-size:.8rem;padding:8px 0}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1><span>lithium-crdt</span> Interactive Demo</h1>
+  <p>Field-level CRDT conflict resolution for Protocol Buffers. Edit documents on different nodes, then sync to see how changes merge.</p>
+  <div class="header-actions">
+    <button class="btn-sync-all" onclick="syncAll()">Sync All Online</button>
+    <button class="btn-reset" onclick="resetAll()">Reset</button>
+  </div>
+</div>
+
+<div class="main">
+  <div class="nodes-row" id="nodes-row"></div>
+  <div class="sync-bar" id="sync-bar"></div>
+</div>
+
+<div class="toast-container" id="toasts"></div>
+
+<script>
+const NODE_IDS = ['node-a','node-b','node-c'];
+const NODE_COLORS = {'node-a':'var(--accent-a)','node-b':'var(--accent-b)','node-c':'var(--accent-c)'};
+let state = [];
+let ws = null;
+
+// Track which sections are open per node. Keys: "nodeId:sectionName", values: boolean.
+// All default to open (true).
+const sectionStates = {};
+const SECTION_NAMES = ['document','tags','version-tree','actors','event-log'];
+NODE_IDS.forEach(nid => SECTION_NAMES.forEach(s => sectionStates[`${nid}:${s}`] = true));
+
+// Track nodes currently showing apply-success feedback so render() doesn't clobber it
+const applyingNodes = new Set();
+
+function isSectionOpen(nodeId, section) {
+  const key = `${nodeId}:${section}`;
+  return sectionStates[key] !== false; // default open
+}
+
+function toggleSection(nodeId, section) {
+  const key = `${nodeId}:${section}`;
+  sectionStates[key] = !isSectionOpen(nodeId, section);
+  const head = document.querySelector(`.node-panel[data-node="${nodeId}"] [data-section="${section}"]`);
+  if (head) head.classList.toggle('open', sectionStates[key]);
+  // also toggle sibling content visibility
+  if (head) {
+    const content = head.nextElementSibling;
+    if (content) content.style.display = sectionStates[key] ? 'block' : 'none';
+  }
+}
+
+function connectWs() {
+  const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  ws = new WebSocket(`${proto}//${location.host}/ws`);
+  ws.onmessage = (e) => { state = JSON.parse(e.data); render(); };
+  ws.onclose = () => setTimeout(connectWs, 2000);
+  ws.onerror = () => ws.close();
+}
+
+async function api(method, path, body) {
+  const opts = { method, headers: {'Content-Type':'application/json'} };
+  if (body) opts.body = JSON.stringify(body);
+  const res = await fetch(`/api${path}`, opts);
+  return res.json();
+}
+
+function showToast(resolution, text) {
+  const c = document.getElementById('toasts');
+  const t = document.createElement('div');
+  t.className = `toast ${resolution}`;
+  t.textContent = text;
+  c.appendChild(t);
+  setTimeout(() => { t.style.opacity = '0'; t.style.transition = 'opacity .3s'; setTimeout(() => t.remove(), 300); }, 2500);
+}
+
+async function applyWrite(nodeId) {
+  const p = document.querySelector(`.node-panel[data-node="${nodeId}"]`);
+  const btn = p.querySelector('.btn-apply');
+  const body = {
+    title: p.querySelector('[data-field="title"]').value,
+    content: p.querySelector('[data-field="content"]').value,
+    author: p.querySelector('[data-field="author"]').value,
+    priority: parseInt(p.querySelector('[data-field="priority"]').value) || 0,
+    status: p.querySelector('[data-field="status"]').value,
+  };
+  const n = state.find(s => s.name === nodeIdToName(nodeId));
+  if (n && n.document) body.tags = n.document.tags;
+  btn.disabled = true;
+  btn.textContent = 'Applying…';
+  applyingNodes.add(nodeId);
+  try {
+    await api('POST', `/nodes/${nodeId}/write`, body);
+    btn.textContent = '✓ Applied';
+    btn.classList.add('success');
+    setTimeout(() => {
+      applyingNodes.delete(nodeId);
+      const freshBtn = p.querySelector('.btn-apply');
+      if (freshBtn) { freshBtn.textContent = 'Apply Changes'; freshBtn.classList.remove('success'); freshBtn.disabled = false; }
+    }, 1200);
+  } catch(e) {
+    btn.textContent = 'Error – Retry';
+    btn.disabled = false;
+    applyingNodes.delete(nodeId);
+    setTimeout(() => { btn.textContent = 'Apply Changes'; }, 2000);
+  }
+}
+
+async function toggleNode(nodeId) { await api('POST', `/nodes/${nodeId}/toggle`); }
+
+async function syncPair(src, tgt) {
+  const res = await api('POST', `/sync/${src}/${tgt}`);
+  showToast(res.resolution, `${res.source} → ${res.target}: ${res.resolution}`);
+}
+
+async function syncAll() {
+  const res = await api('POST', '/sync-all');
+  if (res.results) res.results.forEach(r => showToast(r.resolution, `${r.source} → ${r.target}: ${r.resolution}`));
+}
+
+async function resetAll() { await api('POST', '/reset'); }
+
+async function addTag(nodeId) {
+  const p = document.querySelector(`.node-panel[data-node="${nodeId}"]`);
+  const kI = p.querySelector('.tag-key');
+  const vI = p.querySelector('.tag-val');
+  const k = kI.value.trim(), v = vI.value.trim();
+  if (!k) return;
+  const n = state.find(s => s.name === nodeIdToName(nodeId));
+  const tags = Object.assign({}, n?.document?.tags || {});
+  tags[k] = v;
+  const doc = n?.document || {};
+  await api('POST', `/nodes/${nodeId}/write`, {
+    title: doc.title || '', content: doc.content || '', author: doc.author || '',
+    priority: doc.priority || 0, status: doc.status || '', tags
+  });
+  kI.value = ''; vI.value = '';
+}
+
+async function removeTag(nodeId, key) {
+  const n = state.find(s => s.name === nodeIdToName(nodeId));
+  const tags = Object.assign({}, n?.document?.tags || {});
+  delete tags[key];
+  const doc = n?.document || {};
+  await api('POST', `/nodes/${nodeId}/write`, {
+    title: doc.title || '', content: doc.content || '', author: doc.author || '',
+    priority: doc.priority || 0, status: doc.status || '', tags
+  });
+}
+
+function nodeIdToName(id) { return {['node-a']:'Node A',['node-b']:'Node B',['node-c']:'Node C'}[id]; }
+function nameToId(name) { return {['Node A']:'node-a',['Node B']:'node-b',['Node C']:'node-c'}[name]; }
+
+function relTime(ts) {
+  if (!ts) return '';
+  const d = Date.now() - ts;
+  if (d < 1000) return 'just now';
+  if (d < 60000) return Math.floor(d/1000) + 's ago';
+  if (d < 3600000) return Math.floor(d/60000) + 'm ago';
+  return new Date(ts).toLocaleTimeString();
+}
+
+function renderVersionTree(node, depth) {
+  if (!node) return '<span class="empty-state">No version data</span>';
+  let h = '';
+  const v = node.version;
+  if (v) {
+    h += `<span class="vtree-ts">t=${v.timestamp}</span> <span class="vtree-actor">actor=${v.actorId}</span>`;
+  }
+  if (node.fields) {
+    for (const [k, child] of Object.entries(node.fields)) {
+      h += `<div class="vtree-node"><div class="vtree-line" onclick="this.parentElement.classList.toggle('vtree-collapsed')"><span class="vtree-key">${esc(k)}</span>: `;
+      if (child.version) {
+        h += `<span class="vtree-ts">t=${child.version.timestamp}</span> <span class="vtree-actor">actor=${child.version.actorId}</span>`;
+      }
+      h += '</div>';
+      if (child.fields || child.mapEntries) {
+        h += '<div class="vtree-children">' + renderVersionSubtree(child) + '</div>';
+      }
+      h += '</div>';
+    }
+  }
+  if (node.mapEntries) {
+    for (const [k, child] of Object.entries(node.mapEntries)) {
+      h += `<div class="vtree-node"><div class="vtree-line" onclick="this.parentElement.classList.toggle('vtree-collapsed')"><span class="vtree-key">"${esc(k)}"</span>: `;
+      if (child.version) {
+        h += `<span class="vtree-ts">t=${child.version.timestamp}</span> <span class="vtree-actor">actor=${child.version.actorId}</span>`;
+      }
+      h += '</div></div>';
+    }
+  }
+  return h || '<span class="empty-state">Empty tree</span>';
+}
+
+function renderVersionSubtree(node) {
+  let h = '';
+  if (node.fields) {
+    for (const [k, child] of Object.entries(node.fields)) {
+      h += `<div class="vtree-node"><span class="vtree-key">${esc(k)}</span>: `;
+      if (child.version) h += `<span class="vtree-ts">t=${child.version.timestamp}</span> <span class="vtree-actor">actor=${child.version.actorId}</span>`;
+      h += '</div>';
+    }
+  }
+  if (node.mapEntries) {
+    for (const [k, child] of Object.entries(node.mapEntries)) {
+      h += `<div class="vtree-node"><span class="vtree-key">"${esc(k)}"</span>: `;
+      if (child.version) h += `<span class="vtree-ts">t=${child.version.timestamp}</span> <span class="vtree-actor">actor=${child.version.actorId}</span>`;
+      h += '</div>';
+    }
+  }
+  return h;
+}
+
+function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+function render() {
+  const row = document.getElementById('nodes-row');
+  NODE_IDS.forEach((nodeId, i) => {
+    const n = state[i];
+    if (!n) return;
+    let panel = row.querySelector(`[data-node="${nodeId}"]`);
+    if (!panel) {
+      panel = document.createElement('div');
+      panel.className = 'node-panel';
+      panel.dataset.node = nodeId;
+      row.appendChild(panel);
+    }
+    panel.classList.toggle('offline', !n.online);
+
+    const doc = n.document || {};
+    const focusedEl = panel.querySelector(':focus');
+    const focusedField = focusedEl ? focusedEl.dataset.field : null;
+    // Capture apply-button state before re-render
+    const wasApplying = applyingNodes.has(nodeId);
+
+    panel.innerHTML = `
+      <div class="node-header">
+        <span class="node-name">${esc(n.name)}</span>
+        <span class="toggle-label">${n.online ? 'Online' : 'Offline'}</span>
+        <div class="toggle ${n.online?'on':''}" onclick="toggleNode('${nodeId}')"></div>
+      </div>
+      <div class="node-body">
+        <div class="section">
+          <div class="section-head ${isSectionOpen(nodeId,'document')?'open':''}" data-section="document" onclick="toggleSection('${nodeId}','document')">Document</div>
+          <div class="section-content" style="display:${isSectionOpen(nodeId,'document')?'block':'none'}">
+            <div class="field-row"><label class="field-label">Title</label><input data-field="title" value="${esc(doc.title||'')}" /></div>
+            <div class="field-row"><label class="field-label">Content</label><textarea data-field="content">${esc(doc.content||'')}</textarea></div>
+            <div class="field-row"><label class="field-label">Author</label><input data-field="author" value="${esc(doc.author||'')}" /></div>
+            <div class="field-row"><label class="field-label">Priority</label><input data-field="priority" type="number" value="${doc.priority||0}" /></div>
+            <div class="field-row"><label class="field-label">Status</label><input data-field="status" value="${esc(doc.status||'')}" /></div>
+            <button class="btn-apply" onclick="applyWrite('${nodeId}')">Apply Changes</button>
+          </div>
+        </div>
+        <div class="section">
+          <div class="section-head ${isSectionOpen(nodeId,'tags')?'open':''}" data-section="tags" onclick="toggleSection('${nodeId}','tags')">Tags</div>
+          <div class="section-content" style="display:${isSectionOpen(nodeId,'tags')?'block':'none'}">
+            <div class="tags-list">${renderTags(nodeId, doc.tags)}</div>
+            <div class="tag-add">
+              <input class="tag-key" placeholder="key" />
+              <input class="tag-val" placeholder="value" />
+              <button onclick="addTag('${nodeId}')">+</button>
+            </div>
+          </div>
+        </div>
+        <div class="section">
+          <div class="section-head ${isSectionOpen(nodeId,'version-tree')?'open':''}" data-section="version-tree" onclick="toggleSection('${nodeId}','version-tree')">Version Tree</div>
+          <div class="section-content" style="display:${isSectionOpen(nodeId,'version-tree')?'block':'none'}">
+            <div class="vtree">${renderVersionTree(n.versionNode)}</div>
+          </div>
+        </div>
+        <div class="section">
+          <div class="section-head ${isSectionOpen(nodeId,'actors')?'open':''}" data-section="actors" onclick="toggleSection('${nodeId}','actors')">Actors</div>
+          <div class="section-content" style="display:${isSectionOpen(nodeId,'actors')?'block':'none'}">${renderActors(n.actors)}</div>
+        </div>
+        <div class="section">
+          <div class="section-head ${isSectionOpen(nodeId,'event-log')?'open':''}" data-section="event-log" onclick="toggleSection('${nodeId}','event-log')">Event Log (${n.eventLog.length})</div>
+          <div class="section-content" style="display:${isSectionOpen(nodeId,'event-log')?'block':'none'}"><div class="event-list">${renderEvents(n.eventLog)}</div></div>
+        </div>
+      </div>
+    `;
+
+    if (focusedField) {
+      const el = panel.querySelector(`[data-field="${focusedField}"]`);
+      if (el) el.focus();
+    }
+    // Restore apply-button feedback state if mid-animation
+    if (wasApplying) {
+      const btn = panel.querySelector('.btn-apply');
+      if (btn) { btn.textContent = '✓ Applied'; btn.classList.add('success'); btn.disabled = true; }
+    }
+  });
+
+  renderSyncBar();
+}
+
+function renderTags(nodeId, tags) {
+  if (!tags || !Object.keys(tags).length) return '<span class="empty-state">No tags</span>';
+  return Object.entries(tags).map(([k,v]) =>
+    `<span class="tag-chip">${esc(k)}=${esc(v)} <span class="remove" onclick="removeTag('${nodeId}','${esc(k)}')">&times;</span></span>`
+  ).join('');
+}
+
+function renderActors(actors) {
+  if (!actors) return '<span class="empty-state">No actor data</span>';
+  let h = `<table class="actors-table"><tr><th>Actor ID</th><th>Version</th></tr>`;
+  h += `<tr><td class="actor-local">${actors.localActor} (local)</td><td>${actors.versionVector[String(actors.localActor)] || 0}</td></tr>`;
+  for (const [aid, ver] of Object.entries(actors.versionVector)) {
+    if (aid === String(actors.localActor)) continue;
+    h += `<tr><td>${aid}</td><td>${ver}</td></tr>`;
+  }
+  h += '</table>';
+  return h;
+}
+
+function renderEvents(events) {
+  if (!events.length) return '<span class="empty-state">No events yet</span>';
+  return events.slice().reverse().map(e =>
+    `<div class="event-item">
+      <span class="event-time">${relTime(e.timestamp)}</span>
+      <span class="event-type ${e.type}">${e.type}</span>
+      <span class="event-desc">${esc(e.description)}</span>
+      ${e.resolution ? `<span class="badge ${e.resolution}">${e.resolution}</span>` : ''}
+    </div>`
+  ).join('');
+}
+
+function renderSyncBar() {
+  const bar = document.getElementById('sync-bar');
+  const pairs = [];
+  for (const src of NODE_IDS) {
+    for (const tgt of NODE_IDS) {
+      if (src === tgt) continue;
+      pairs.push([src, tgt]);
+    }
+  }
+  const srcN = id => state.find(s => s.name === nodeIdToName(id));
+  bar.innerHTML = '<span class="sync-bar-label">Sync:</span>' + pairs.map(([s,t]) => {
+    const sn = srcN(s), tn = srcN(t);
+    const disabled = !(sn && sn.online && tn && tn.online);
+    const sl = s.replace('node-','').toUpperCase();
+    const tl = t.replace('node-','').toUpperCase();
+    return `<button class="btn-sync" ${disabled?'disabled':''} onclick="syncPair('${s}','${t}')">${sl}<span class="arrow"> → </span>${tl}</button>`;
+  }).join('');
+}
+
+async function init() {
+  state = await api('GET', '/nodes');
+  render();
+  connectWs();
+}
+
+init();
+</script>
+</body>
+</html>

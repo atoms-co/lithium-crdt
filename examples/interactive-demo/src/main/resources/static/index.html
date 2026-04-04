@@ -119,6 +119,20 @@ textarea{resize:vertical;min-height:60px}
 .badge.MERGED_VALUES{background:rgba(16,185,129,.2);color:var(--green)}
 
 .empty-state{color:var(--text3);font-style:italic;font-size:.8rem;padding:8px 0}
+
+.settings-bar{background:var(--bg2);border-bottom:1px solid var(--border);padding:8px 24px;display:flex;align-items:center;gap:16px;flex-wrap:wrap;font-size:.85rem}
+.settings-label{color:var(--text2);font-weight:600;font-size:.8rem;letter-spacing:.3px;text-transform:uppercase}
+.setting-toggle{display:flex;align-items:center;gap:6px;cursor:pointer;color:var(--text);font-size:.85rem;user-select:none}
+.setting-toggle input[type="checkbox"]{accent-color:var(--blue);width:15px;height:15px;cursor:pointer}
+.latency-control{display:flex;align-items:center;gap:8px;color:var(--text2);font-size:.85rem}
+.latency-control input[type="range"]{width:160px;accent-color:var(--blue);cursor:pointer}
+.latency-val{color:var(--orange);font-family:var(--mono);font-weight:600;min-width:48px;text-align:right}
+.auto-save-indicator{font-size:.75rem;font-family:var(--mono);height:18px;line-height:18px;margin-top:4px;transition:opacity .3s}
+.auto-save-indicator.saving{color:var(--text3)}
+.auto-save-indicator.saved{color:var(--green)}
+.auto-save-indicator.error{color:var(--red)}
+.sync-bar-auto{color:var(--text2);font-size:.8rem;display:flex;align-items:center;gap:8px}
+.sync-bar-auto .latency-badge{background:rgba(245,158,11,.15);color:var(--orange);padding:2px 8px;border-radius:4px;font-family:var(--mono);font-size:.75rem}
 </style>
 </head>
 <body>
@@ -127,8 +141,23 @@ textarea{resize:vertical;min-height:60px}
   <h1><span>lithium-crdt</span> Interactive Demo</h1>
   <p>Field-level CRDT conflict resolution for Protocol Buffers. Edit documents on different nodes, then sync to see how changes merge.</p>
   <div class="header-actions">
-    <button class="btn-sync-all" onclick="syncAll()">Sync All Online</button>
+    <button class="btn-sync-all" id="btn-sync-all" onclick="syncAll()" style="display:none">Sync All Online</button>
     <button class="btn-reset" onclick="resetAll()">Reset</button>
+  </div>
+</div>
+
+<div class="settings-bar" id="settings-bar">
+  <span class="settings-label">Options</span>
+  <label class="setting-toggle">
+    <input type="checkbox" id="opt-autosave" checked onchange="toggleAutoSave()" /> Auto-save
+  </label>
+  <label class="setting-toggle">
+    <input type="checkbox" id="opt-autosync" checked onchange="toggleAutoSync()" /> Auto-sync
+  </label>
+  <div class="latency-control" id="latency-control" style="display:flex">
+    <span>Latency:</span>
+    <input type="range" id="latency-slider" min="0" max="3000" step="50" value="500" oninput="updateLatency()" />
+    <span class="latency-val" id="latency-val">500ms</span>
   </div>
 </div>
 
@@ -153,6 +182,116 @@ NODE_IDS.forEach(nid => SECTION_NAMES.forEach(s => sectionStates[`${nid}:${s}`] 
 
 // Track nodes currently showing apply-success feedback so render() doesn't clobber it
 const applyingNodes = new Set();
+
+// --- Auto-save & Auto-sync state ---
+let autoSaveEnabled = true;
+let autoSyncEnabled = true;
+let latencyMs = 500;
+const debounceTimers = {};   // nodeId -> timer
+const pendingSyncs = {};     // "src:tgt" -> timer
+const autoSavingNodes = {};  // nodeId -> 'saving'|'saved'|'error'|null
+
+function toggleAutoSave() {
+  autoSaveEnabled = document.getElementById('opt-autosave').checked;
+  // Clear any pending debounce timers when disabling
+  if (!autoSaveEnabled) {
+    Object.keys(debounceTimers).forEach(k => { clearTimeout(debounceTimers[k]); delete debounceTimers[k]; });
+    Object.keys(autoSavingNodes).forEach(k => delete autoSavingNodes[k]);
+  }
+  render();
+}
+
+function toggleAutoSync() {
+  autoSyncEnabled = document.getElementById('opt-autosync').checked;
+  document.getElementById('latency-control').style.display = autoSyncEnabled ? 'flex' : 'none';
+  document.getElementById('btn-sync-all').style.display = autoSyncEnabled ? 'none' : '';
+  if (!autoSyncEnabled) {
+    Object.keys(pendingSyncs).forEach(k => { clearTimeout(pendingSyncs[k]); delete pendingSyncs[k]; });
+  }
+  renderSyncBar();
+}
+
+function updateLatency() {
+  latencyMs = parseInt(document.getElementById('latency-slider').value);
+  document.getElementById('latency-val').textContent = latencyMs + 'ms';
+}
+
+function scheduleAutoSync(sourceNodeId) {
+  if (!autoSyncEnabled) return;
+  NODE_IDS.forEach(targetId => {
+    if (targetId === sourceNodeId) return;
+    const key = `${sourceNodeId}:${targetId}`;
+    if (pendingSyncs[key]) clearTimeout(pendingSyncs[key]);
+    pendingSyncs[key] = setTimeout(async () => {
+      delete pendingSyncs[key];
+      const src = state.find(s => s.name === nodeIdToName(sourceNodeId));
+      const tgt = state.find(s => s.name === nodeIdToName(targetId));
+      if (src?.online && tgt?.online) {
+        await syncPair(sourceNodeId, targetId);
+      }
+    }, latencyMs);
+  });
+}
+
+function scheduleAutoSave(nodeId) {
+  if (!autoSaveEnabled) return;
+  if (debounceTimers[nodeId]) clearTimeout(debounceTimers[nodeId]);
+  debounceTimers[nodeId] = setTimeout(() => {
+    delete debounceTimers[nodeId];
+    doAutoSave(nodeId);
+  }, 300);
+}
+
+async function doAutoSave(nodeId) {
+  const p = document.querySelector(`.node-panel[data-node="${nodeId}"]`);
+  if (!p) return;
+  const body = {
+    title: p.querySelector('[data-field="title"]')?.value ?? '',
+    content: p.querySelector('[data-field="content"]')?.value ?? '',
+    author: p.querySelector('[data-field="author"]')?.value ?? '',
+    priority: parseInt(p.querySelector('[data-field="priority"]')?.value) || 0,
+    status: p.querySelector('[data-field="status"]')?.value ?? '',
+  };
+  const n = state.find(s => s.name === nodeIdToName(nodeId));
+  if (n && n.document) body.tags = n.document.tags;
+
+  autoSavingNodes[nodeId] = 'saving';
+  updateAutoSaveIndicator(nodeId);
+
+  try {
+    await api('POST', `/nodes/${nodeId}/write`, body);
+    autoSavingNodes[nodeId] = 'saved';
+    updateAutoSaveIndicator(nodeId);
+    scheduleAutoSync(nodeId);
+    setTimeout(() => {
+      if (autoSavingNodes[nodeId] === 'saved') {
+        autoSavingNodes[nodeId] = null;
+        updateAutoSaveIndicator(nodeId);
+      }
+    }, 1200);
+  } catch(e) {
+    autoSavingNodes[nodeId] = 'error';
+    updateAutoSaveIndicator(nodeId);
+    setTimeout(() => {
+      if (autoSavingNodes[nodeId] === 'error') {
+        autoSavingNodes[nodeId] = null;
+        updateAutoSaveIndicator(nodeId);
+      }
+    }, 2000);
+  }
+}
+
+function updateAutoSaveIndicator(nodeId) {
+  const p = document.querySelector(`.node-panel[data-node="${nodeId}"]`);
+  if (!p) return;
+  const el = p.querySelector('.auto-save-indicator');
+  if (!el) return;
+  const s = autoSavingNodes[nodeId];
+  if (s === 'saving') { el.textContent = 'Saving…'; el.className = 'auto-save-indicator saving'; }
+  else if (s === 'saved') { el.textContent = '✓ Saved'; el.className = 'auto-save-indicator saved'; }
+  else if (s === 'error') { el.textContent = 'Save failed'; el.className = 'auto-save-indicator error'; }
+  else { el.textContent = ''; el.className = 'auto-save-indicator'; }
+}
 
 function isSectionOpen(nodeId, section) {
   const key = `${nodeId}:${section}`;
@@ -214,6 +353,7 @@ async function applyWrite(nodeId) {
     await api('POST', `/nodes/${nodeId}/write`, body);
     btn.textContent = '✓ Applied';
     btn.classList.add('success');
+    scheduleAutoSync(nodeId);
     setTimeout(() => {
       applyingNodes.delete(nodeId);
       const freshBtn = p.querySelector('.btn-apply');
@@ -256,6 +396,7 @@ async function addTag(nodeId) {
     priority: doc.priority || 0, status: doc.status || '', tags
   });
   kI.value = ''; vI.value = '';
+  scheduleAutoSync(nodeId);
 }
 
 async function removeTag(nodeId, key) {
@@ -267,6 +408,7 @@ async function removeTag(nodeId, key) {
     title: doc.title || '', content: doc.content || '', author: doc.author || '',
     priority: doc.priority || 0, status: doc.status || '', tags
   });
+  scheduleAutoSync(nodeId);
 }
 
 function nodeIdToName(id) { return {['node-a']:'Node A',['node-b']:'Node B',['node-c']:'Node C'}[id]; }
@@ -351,6 +493,9 @@ function render() {
     const doc = n.document || {};
     const focusedEl = panel.querySelector(':focus');
     const focusedField = focusedEl ? focusedEl.dataset.field : null;
+    const focusedValue = focusedEl ? focusedEl.value : null;
+    const selStart = focusedEl?.selectionStart;
+    const selEnd = focusedEl?.selectionEnd;
     // Capture apply-button state before re-render
     const wasApplying = applyingNodes.has(nodeId);
 
@@ -367,9 +512,12 @@ function render() {
             <div class="field-row"><label class="field-label">Title</label><input data-field="title" value="${esc(doc.title||'')}" /></div>
             <div class="field-row"><label class="field-label">Content</label><textarea data-field="content">${esc(doc.content||'')}</textarea></div>
             <div class="field-row"><label class="field-label">Author</label><input data-field="author" value="${esc(doc.author||'')}" /></div>
-            <div class="field-row"><label class="field-label">Priority</label><input data-field="priority" type="number" value="${doc.priority||0}" /></div>
+            <div class="field-row"><label class="field-label">Priority</label><input type="number" data-field="priority" value="${doc.priority||0}" /></div>
             <div class="field-row"><label class="field-label">Status</label><input data-field="status" value="${esc(doc.status||'')}" /></div>
-            <button class="btn-apply" onclick="applyWrite('${nodeId}')">Apply Changes</button>
+            ${autoSaveEnabled
+              ? '<div class="auto-save-indicator"></div>'
+              : `<button class="btn-apply" onclick="applyWrite('${nodeId}')">Apply Changes</button>`
+            }
           </div>
         </div>
         <div class="section">
@@ -402,12 +550,21 @@ function render() {
 
     if (focusedField) {
       const el = panel.querySelector(`[data-field="${focusedField}"]`);
-      if (el) el.focus();
+      if (el) {
+        // Restore user's in-flight typing (not server value) so keystrokes aren't lost during re-render
+        if (focusedValue !== null) el.value = focusedValue;
+        el.focus();
+        try { if (selStart != null) { el.selectionStart = selStart; el.selectionEnd = selEnd; } } catch(e) {}
+      }
     }
     // Restore apply-button feedback state if mid-animation
     if (wasApplying) {
       const btn = panel.querySelector('.btn-apply');
       if (btn) { btn.textContent = '✓ Applied'; btn.classList.add('success'); btn.disabled = true; }
+    }
+    // Restore auto-save indicator state after re-render
+    if (autoSaveEnabled && autoSavingNodes[nodeId]) {
+      updateAutoSaveIndicator(nodeId);
     }
   });
 
@@ -447,6 +604,14 @@ function renderEvents(events) {
 
 function renderSyncBar() {
   const bar = document.getElementById('sync-bar');
+  if (autoSyncEnabled) {
+    bar.innerHTML = `<span class="sync-bar-label">Sync:</span>
+      <div class="sync-bar-auto">
+        Auto-sync enabled <span class="latency-badge">${latencyMs}ms latency</span>
+        Changes propagate automatically between online nodes
+      </div>`;
+    return;
+  }
   const pairs = [];
   for (const src of NODE_IDS) {
     for (const tgt of NODE_IDS) {
@@ -468,6 +633,16 @@ async function init() {
   state = await api('GET', '/nodes');
   render();
   connectWs();
+
+  // Event delegation: auto-save on field input
+  document.getElementById('nodes-row').addEventListener('input', function(e) {
+    if (!autoSaveEnabled) return;
+    const field = e.target.closest('[data-field]');
+    if (!field) return;
+    const panel = field.closest('.node-panel');
+    if (!panel) return;
+    scheduleAutoSave(panel.dataset.node);
+  });
 }
 
 init();

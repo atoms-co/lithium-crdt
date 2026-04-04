@@ -120,6 +120,13 @@ textarea{resize:vertical;min-height:60px}
 
 .empty-state{color:var(--text3);font-style:italic;font-size:.8rem;padding:8px 0}
 
+.counter-row{display:flex;align-items:center;gap:8px}
+.counter-btn{width:32px;height:32px;display:flex;align-items:center;justify-content:center;font-size:1.1rem;font-weight:700;background:var(--bg3);color:var(--text);border-radius:var(--radius)}
+.counter-btn:hover{background:var(--bg)}
+.counter-val{font-family:var(--mono);font-size:1rem;font-weight:700;min-width:36px;text-align:center}
+.vtree-counter{font-size:.7rem;color:var(--text2);margin-left:4px}
+.vtree-counter-actor{display:block;padding-left:16px;font-size:.7rem;color:var(--text3)}
+
 .settings-bar{background:var(--bg2);border-bottom:1px solid var(--border);padding:8px 24px;display:flex;align-items:center;gap:16px;flex-wrap:wrap;font-size:.85rem}
 .settings-label{color:var(--text2);font-weight:600;font-size:.8rem;letter-spacing:.3px;text-transform:uppercase}
 .setting-toggle{display:flex;align-items:center;gap:6px;cursor:pointer;color:var(--text);font-size:.85rem;user-select:none}
@@ -156,7 +163,7 @@ textarea{resize:vertical;min-height:60px}
   </label>
   <div class="latency-control" id="latency-control" style="display:flex">
     <span>Latency:</span>
-    <input type="range" id="latency-slider" min="0" max="3000" step="50" value="500" oninput="updateLatency()" />
+    <input type="range" id="latency-slider" min="0" max="10000" step="50" value="500" oninput="updateLatency()" />
     <span class="latency-val" id="latency-val">500ms</span>
   </div>
 </div>
@@ -249,7 +256,7 @@ async function doAutoSave(nodeId) {
     title: p.querySelector('[data-field="title"]')?.value ?? '',
     content: p.querySelector('[data-field="content"]')?.value ?? '',
     author: p.querySelector('[data-field="author"]')?.value ?? '',
-    priority: parseInt(p.querySelector('[data-field="priority"]')?.value) || 0,
+    priority: parseInt(p.querySelector('[data-field="priority-display"]')?.textContent) || 0,
     status: p.querySelector('[data-field="status"]')?.value ?? '',
   };
   const n = state.find(s => s.name === nodeIdToName(nodeId));
@@ -334,6 +341,18 @@ function showToast(resolution, text) {
   setTimeout(() => { t.style.opacity = '0'; t.style.transition = 'opacity .3s'; setTimeout(() => t.remove(), 300); }, 2500);
 }
 
+async function adjustCounter(nodeId, delta) {
+  const n = state.find(s => s.name === nodeIdToName(nodeId));
+  if (!n?.document) return;
+  const doc = n.document;
+  const newPriority = (doc.priority || 0) + delta;
+  await api('POST', `/nodes/${nodeId}/write`, {
+    title: doc.title || '', content: doc.content || '', author: doc.author || '',
+    priority: newPriority, status: doc.status || '', tags: doc.tags || {}
+  });
+  scheduleAutoSync(nodeId);
+}
+
 async function applyWrite(nodeId) {
   const p = document.querySelector(`.node-panel[data-node="${nodeId}"]`);
   const btn = p.querySelector('.btn-apply');
@@ -341,7 +360,7 @@ async function applyWrite(nodeId) {
     title: p.querySelector('[data-field="title"]').value,
     content: p.querySelector('[data-field="content"]').value,
     author: p.querySelector('[data-field="author"]').value,
-    priority: parseInt(p.querySelector('[data-field="priority"]').value) || 0,
+    priority: parseInt(p.querySelector('[data-field="priority-display"]')?.textContent) || 0,
     status: p.querySelector('[data-field="status"]').value,
   };
   const n = state.find(s => s.name === nodeIdToName(nodeId));
@@ -436,7 +455,17 @@ function renderVersionTree(node, depth) {
       if (child.version) {
         h += `<span class="vtree-ts">t=${child.version.timestamp}</span> <span class="vtree-actor">actor=${child.version.actorId}</span>`;
       }
+      if (child.counter) {
+        h += `<span class="vtree-counter">[counter: ${child.counter.total}]</span>`;
+      }
       h += '</div>';
+      if (child.counter) {
+        h += '<div class="vtree-children">';
+        child.counter.actors.forEach(a => {
+          h += `<div class="vtree-counter-actor">actor ${a.actorId}: ${a.value > 0 ? '+' : ''}${a.value} (v${a.actorVersion})</div>`;
+        });
+        h += '</div>';
+      }
       if (child.fields || child.mapEntries) {
         h += '<div class="vtree-children">' + renderVersionSubtree(child) + '</div>';
       }
@@ -512,7 +541,13 @@ function render() {
             <div class="field-row"><label class="field-label">Title</label><input data-field="title" value="${esc(doc.title||'')}" /></div>
             <div class="field-row"><label class="field-label">Content</label><textarea data-field="content">${esc(doc.content||'')}</textarea></div>
             <div class="field-row"><label class="field-label">Author</label><input data-field="author" value="${esc(doc.author||'')}" /></div>
-            <div class="field-row"><label class="field-label">Priority</label><input type="number" data-field="priority" value="${doc.priority||0}" /></div>
+            <div class="field-row"><label class="field-label">Priority</label>
+              <div class="counter-row">
+                <button class="counter-btn" onclick="adjustCounter('${nodeId}',-1)">−</button>
+                <span class="counter-val" data-field="priority-display">${doc.priority||0}</span>
+                <button class="counter-btn" onclick="adjustCounter('${nodeId}',1)">+</button>
+              </div>
+            </div>
             <div class="field-row"><label class="field-label">Status</label><input data-field="status" value="${esc(doc.status||'')}" /></div>
             ${autoSaveEnabled
               ? '<div class="auto-save-indicator"></div>'

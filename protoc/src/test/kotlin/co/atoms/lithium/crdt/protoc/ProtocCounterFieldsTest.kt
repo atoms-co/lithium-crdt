@@ -158,6 +158,212 @@ class ProtocCounterFieldsTest {
     }
 
     @Test
+    fun `counterValue - three consecutive writes then merge preserves accumulated value`() {
+        // Write 1: Create message with counter=10
+        val delta1 = resolver.applyLocalWrite(
+            currentValue = null,
+            currentNode = null,
+            currentActors = null,
+            newValue = TestMessage.newBuilder().setCounterValue(10L).build(),
+            timestamp = 1000L,
+        )
+
+        // Write 2: Increment counter to 25
+        val delta2 = resolver.applyLocalWrite(
+            currentValue = delta1.mergeResult.value,
+            currentNode = delta1.mergeResult.node,
+            currentActors = delta1.actors,
+            newValue = TestMessage.newBuilder().setCounterValue(25L).build(),
+            timestamp = 2000L,
+        )
+
+        // Write 3: Increment counter to 40 (triggers plus() on simple node)
+        val delta3 = resolver.applyLocalWrite(
+            currentValue = delta2.mergeResult.value,
+            currentNode = delta2.mergeResult.node,
+            currentActors = delta2.actors,
+            newValue = TestMessage.newBuilder().setCounterValue(40L).build(),
+            timestamp = 3000L,
+        )
+
+        assertThat(delta3.mergeResult.value?.counterValue).isEqualTo(40L)
+
+        // Merge with another actor who independently wrote counter=20
+        val otherDelta = resolver.applyLocalWrite(
+            currentValue = null,
+            currentNode = null,
+            currentActors = null,
+            newValue = TestMessage.newBuilder().setCounterValue(20L).build(),
+            timestamp = 1500L,
+        )
+
+        val merged = resolver.resolveConflict(
+            localValue = delta3.mergeResult.value,
+            localNode = delta3.mergeResult.node,
+            localActors = delta3.actors,
+            incomingValue = otherDelta.mergeResult.value,
+            incomingNode = requireNotNull(otherDelta.mergeResult.node),
+            incomingVersionVector = otherDelta.actors.versionVectorMap,
+        )
+
+        // Should be 40 + 20 = 60
+        assertThat(merged.mergeResult.value?.counterValue).isEqualTo(60L)
+        with(ProtocVersionTreeResolver) {
+            assertThat(merged.mergeResult.node?.struct?.fieldsMap?.get(31)?.counterValue)
+                .isEqualTo(60L)
+        }
+    }
+
+    @Test
+    fun `counterValue - interleaved field updates preserve counter accumulation`() {
+        // Write 1: Create message with counter=5 and a string field
+        val delta1 = resolver.applyLocalWrite(
+            currentValue = null,
+            currentNode = null,
+            currentActors = null,
+            newValue = TestMessage.newBuilder()
+                .setCounterValue(5L)
+                .setStringValue("hello")
+                .build(),
+            timestamp = 1000L,
+        )
+
+        // Write 2: Update only counter to 15
+        val delta2 = resolver.applyLocalWrite(
+            currentValue = delta1.mergeResult.value,
+            currentNode = delta1.mergeResult.node,
+            currentActors = delta1.actors,
+            newValue = TestMessage.newBuilder()
+                .setCounterValue(15L)
+                .setStringValue("hello")
+                .build(),
+            timestamp = 2000L,
+        )
+
+        // Write 3: Update only counter to 30
+        val delta3 = resolver.applyLocalWrite(
+            currentValue = delta2.mergeResult.value,
+            currentNode = delta2.mergeResult.node,
+            currentActors = delta2.actors,
+            newValue = TestMessage.newBuilder()
+                .setCounterValue(30L)
+                .setStringValue("hello")
+                .build(),
+            timestamp = 3000L,
+        )
+
+        // Write 4: Update only the string field (counter unchanged)
+        val delta4 = resolver.applyLocalWrite(
+            currentValue = delta3.mergeResult.value,
+            currentNode = delta3.mergeResult.node,
+            currentActors = delta3.actors,
+            newValue = TestMessage.newBuilder()
+                .setCounterValue(30L)
+                .setStringValue("world")
+                .build(),
+            timestamp = 4000L,
+        )
+
+        // Merge with another actor who wrote counter=10
+        val otherDelta = resolver.applyLocalWrite(
+            currentValue = null,
+            currentNode = null,
+            currentActors = null,
+            newValue = TestMessage.newBuilder().setCounterValue(10L).build(),
+            timestamp = 1500L,
+        )
+
+        val merged = resolver.resolveConflict(
+            localValue = delta4.mergeResult.value,
+            localNode = delta4.mergeResult.node,
+            localActors = delta4.actors,
+            incomingValue = otherDelta.mergeResult.value,
+            incomingNode = requireNotNull(otherDelta.mergeResult.node),
+            incomingVersionVector = otherDelta.actors.versionVectorMap,
+        )
+
+        // Should be 30 + 10 = 40
+        assertThat(merged.mergeResult.value?.counterValue).isEqualTo(40L)
+    }
+
+    @Test
+    fun `counterValue - writes after merge preserve counter structure`() {
+        // Actor A: counter=10
+        val deltaA = resolver.applyLocalWrite(
+            currentValue = null,
+            currentNode = null,
+            currentActors = null,
+            newValue = TestMessage.newBuilder().setCounterValue(10L).build(),
+            timestamp = 1000L,
+        )
+
+        // Actor B: counter=20
+        val deltaB = resolver.applyLocalWrite(
+            currentValue = null,
+            currentNode = null,
+            currentActors = null,
+            newValue = TestMessage.newBuilder().setCounterValue(20L).build(),
+            timestamp = 1100L,
+        )
+
+        // Merge A+B = 30
+        val merged = resolver.resolveConflict(
+            localValue = deltaA.mergeResult.value,
+            localNode = deltaA.mergeResult.node,
+            localActors = deltaA.actors,
+            incomingValue = deltaB.mergeResult.value,
+            incomingNode = requireNotNull(deltaB.mergeResult.node),
+            incomingVersionVector = deltaB.actors.versionVectorMap,
+        )
+        assertThat(merged.mergeResult.value?.counterValue).isEqualTo(30L)
+
+        // Actor A continues from merged state: counter=45
+        val deltaA2 = resolver.applyLocalWrite(
+            currentValue = merged.mergeResult.value,
+            currentNode = merged.mergeResult.node,
+            currentActors = merged.actors,
+            newValue = TestMessage.newBuilder().setCounterValue(45L).build(),
+            timestamp = 2000L,
+        )
+
+        // Actor A increments again: counter=55
+        val deltaA3 = resolver.applyLocalWrite(
+            currentValue = deltaA2.mergeResult.value,
+            currentNode = deltaA2.mergeResult.node,
+            currentActors = deltaA2.actors,
+            newValue = TestMessage.newBuilder().setCounterValue(55L).build(),
+            timestamp = 3000L,
+        )
+
+        assertThat(deltaA3.mergeResult.value?.counterValue).isEqualTo(55L)
+
+        // Merge with Actor C: counter=5
+        val deltaC = resolver.applyLocalWrite(
+            currentValue = null,
+            currentNode = null,
+            currentActors = null,
+            newValue = TestMessage.newBuilder().setCounterValue(5L).build(),
+            timestamp = 1200L,
+        )
+
+        val finalMerge = resolver.resolveConflict(
+            localValue = deltaA3.mergeResult.value,
+            localNode = deltaA3.mergeResult.node,
+            localActors = deltaA3.actors,
+            incomingValue = deltaC.mergeResult.value,
+            incomingNode = requireNotNull(deltaC.mergeResult.node),
+            incomingVersionVector = deltaC.actors.versionVectorMap,
+        )
+
+        // Should be 55 + 5 = 60
+        assertThat(finalMerge.mergeResult.value?.counterValue).isEqualTo(60L)
+        with(ProtocVersionTreeResolver) {
+            assertThat(finalMerge.mergeResult.node?.struct?.fieldsMap?.get(31)?.counterValue)
+                .isEqualTo(60L)
+        }
+    }
+
+    @Test
     fun `counterValue - three actors merge correctly`() {
         // Given - three actors with different counter values
         val delta1 = resolver.applyLocalWrite(

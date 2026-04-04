@@ -32,10 +32,24 @@ data class DocumentDto(
 )
 
 @Serializable
+data class CounterActorDto(
+    val actorId: Long,
+    val actorVersion: Long,
+    val value: Long,
+)
+
+@Serializable
+data class CounterDto(
+    val total: Long,
+    val actors: List<CounterActorDto>,
+)
+
+@Serializable
 data class VersionNodeDto(
     val version: VersionDto?,
     val fields: Map<String, VersionNodeDto>?,
     val mapEntries: Map<String, VersionNodeDto>?,
+    val counter: CounterDto? = null,
 )
 
 @Serializable
@@ -106,6 +120,14 @@ fun VersionNode.toDto(): VersionNodeDto = VersionNodeDto(
     }?.mapValues { (_, v) -> v.toDto() },
     mapEntries = string_map?.entries?.takeIf { it.isNotEmpty() }?.mapValues { (_, v) ->
         v.toDto()
+    },
+    counter = counter?.actor_count?.takeIf { it.isNotEmpty() }?.let { actors ->
+        CounterDto(
+            total = actors.values.sumOf { it.value_ },
+            actors = actors.map { (actorId, vc) ->
+                CounterActorDto(actorId = actorId, actorVersion = vc.version, value = vc.value_)
+            },
+        )
     },
 )
 

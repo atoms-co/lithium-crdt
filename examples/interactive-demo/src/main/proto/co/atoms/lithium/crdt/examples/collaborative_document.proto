@@ -5,6 +5,7 @@ package co.atoms.lithium.crdt.examples;
 option java_multiple_files = true;
 
 import "co/atoms/lithium/crdt/data/options/message_options.proto";
+import "co/atoms/lithium/crdt/data/options/field_options.proto";
 
 // A simple collaborative document used to demonstrate CRDT conflict resolution.
 // Each field is independently version-tracked, so two devices can edit different
@@ -15,7 +16,9 @@ message CollaborativeDocument {
   string title = 1;
   string content = 2;
   string author = 3;
-  int32 priority = 4;
+  int32 priority = 4 [
+    (co.atoms.lithium.crdt.data.options.crdt_merge_strategy) = COUNTER
+  ];
   string status = 5;
   map<string, string> tags = 6;
 }

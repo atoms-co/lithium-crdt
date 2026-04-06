@@ -9,7 +9,7 @@
 [![Maven Central](https://img.shields.io/maven-central/v/co.atoms.lithium.crdt/crdt-resolver.svg)](https://search.maven.org/search?q=g:co.atoms.lithium.crdt)
 [![Build Status](https://github.com/atoms-co/lithium-crdt/workflows/CI/badge.svg)](https://github.com/atoms-co/lithium-crdt/actions)
 
-[Blog Post](https://techblog.atoms.co/p/protocol-buffer-crdts-outperforming) · [Documentation](#documentation) · [Examples](#quick-start)
+[Blog Post](https://techblog.atoms.co/p/protocol-buffer-crdts-outperforming) · [Documentation](#documentation) · [Try It](#try-it-interactively)
 
 </div>
 
@@ -134,6 +134,25 @@ when (strategy) {
     MERGED_VALUES -> { /* different fields merged from both sides */ }
 }
 ```
+
+## Try It Interactively
+
+Run our interactive demo app, which simulates three devices editing the same protobuf message, syncing independently, and merging only the fields that changed.
+
+```bash
+git clone https://github.com/atoms-co/lithium-crdt.git
+cd lithium-crdt
+./gradlew :examples:interactive-demo:run
+```
+
+What you'll see right away:
+
+- **Different fields edited on different nodes both survive sync**
+- **The same field resolves deterministically by version**
+- **The parallel `VersionNode` tree** that makes field-level merging possible
+- **Counter fields** that add across actors instead of last-write-wins
+
+See the full demo guide in [`examples/interactive-demo/README.md`](examples/interactive-demo/README.md).
 
 ## How It Works
 

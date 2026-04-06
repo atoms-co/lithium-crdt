@@ -165,7 +165,15 @@ fun main() {
                 }
             }
         }
+    }.apply {
+        environment.monitor.subscribe(io.ktor.server.application.ServerReady) {
+            val url = "http://localhost:8080"
+            println("CRDT Demo running at $url")
+            try {
+                java.awt.Desktop.getDesktop().browse(java.net.URI(url))
+            } catch (_: Exception) {
+                // Headless environment or unsupported platform — user can open manually
+            }
+        }
     }.start(wait = true)
-
-    println("CRDT Demo running at http://localhost:8080")
 }

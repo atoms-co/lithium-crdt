@@ -5,10 +5,12 @@ An interactive web demo showing how lithium-crdt performs field-level CRDT confl
 ## Running
 
 ```bash
+git clone https://github.com/atoms-co/lithium-crdt.git
+cd lithium-crdt
 ./gradlew :examples:interactive-demo:run
 ```
 
-Then open [http://localhost:8080](http://localhost:8080) in your browser.
+Your browser will open [http://localhost:8080](http://localhost:8080) automatically.
 
 ## What it demonstrates
 

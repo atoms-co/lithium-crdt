@@ -43,16 +43,7 @@ class CrdtNode(val name: String) {
     val eventLog: MutableList<EventLogEntry> = mutableListOf()
 
     init {
-        val delta = resolver.applyLocalWrite(
-            currentValue = null,
-            currentNode = null,
-            currentActors = null,
-            newValue = EMPTY_DOCUMENT,
-            timestamp = 0L,
-        )
-        document = delta.mergeResult.value
-        versionNode = delta.mergeResult.node
-        actors = delta.actors
+        reset()
     }
 
     fun applyLocalWrite(newDocument: CollaborativeDocument): Boolean {

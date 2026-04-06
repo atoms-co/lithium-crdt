@@ -35,6 +35,7 @@ include(":protoc-data")
 include(":fixtures")
 include(":wire-test")
 include(":protoc-test")
+include(":examples:interactive-demo")
 
 // Map test modules to their directory structure
 project(":wire-test").projectDir = file("wire/test")

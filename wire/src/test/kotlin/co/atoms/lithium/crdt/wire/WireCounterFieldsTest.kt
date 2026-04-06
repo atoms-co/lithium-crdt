@@ -137,6 +137,176 @@ class WireCounterFieldsTest {
     }
 
     @Test
+    fun `counterValue - three consecutive writes then merge preserves accumulated value`() {
+        // Write 1: Create message with counter=10
+        val delta1 = adapter.applyLocalWrite(
+            currentValue = null,
+            currentNode = null,
+            currentActors = null,
+            newValue = TestMessage(counterValue = 10L),
+            timestamp = 1000L,
+        )
+
+        // Write 2: Increment counter to 25 (only counter changes, other fields unchanged)
+        val delta2 = adapter.applyLocalWrite(
+            currentValue = delta1.mergeResult.value,
+            currentNode = delta1.mergeResult.node,
+            currentActors = delta1.actors,
+            newValue = TestMessage(counterValue = 25L),
+            timestamp = 2000L,
+        )
+
+        // Write 3: Increment counter to 40 (triggers plus() on simple node)
+        val delta3 = adapter.applyLocalWrite(
+            currentValue = delta2.mergeResult.value,
+            currentNode = delta2.mergeResult.node,
+            currentActors = delta2.actors,
+            newValue = TestMessage(counterValue = 40L),
+            timestamp = 3000L,
+        )
+
+        // Verify local value is correct (parallel data is fine)
+        assertThat(delta3.mergeResult.value?.counterValue).isEqualTo(40L)
+
+        // Now merge with another actor who independently wrote counter=20
+        val otherDelta = adapter.applyLocalWrite(
+            currentValue = null,
+            currentNode = null,
+            currentActors = null,
+            newValue = TestMessage(counterValue = 20L),
+            timestamp = 1500L,
+        )
+
+        val merged = adapter.resolveConflict(lhs = delta3, rhs = otherDelta)
+
+        // CRITICAL: Should be 40 + 20 = 60.
+        assertThat(merged.mergeResult.value?.counterValue).isEqualTo(60L)
+        with(WireVersionTreeResolver) {
+            assertThat(merged.mergeResult.node?.struct?.fields?.get(31)?.counterValue)
+                .isEqualTo(60L)
+        }
+    }
+
+    @Test
+    fun `counterValue - interleaved field updates preserve counter accumulation`() {
+        // Write 1: Create message with counter=5 and a string field
+        val delta1 = adapter.applyLocalWrite(
+            currentValue = null,
+            currentNode = null,
+            currentActors = null,
+            newValue = TestMessage(counterValue = 5L, stringValue = "hello"),
+            timestamp = 1000L,
+        )
+
+        // Write 2: Update only counter to 15 (string unchanged)
+        val delta2 = adapter.applyLocalWrite(
+            currentValue = delta1.mergeResult.value,
+            currentNode = delta1.mergeResult.node,
+            currentActors = delta1.actors,
+            newValue = TestMessage(counterValue = 15L, stringValue = "hello"),
+            timestamp = 2000L,
+        )
+
+        // Write 3: Update only counter to 30 (string still unchanged)
+        val delta3 = adapter.applyLocalWrite(
+            currentValue = delta2.mergeResult.value,
+            currentNode = delta2.mergeResult.node,
+            currentActors = delta2.actors,
+            newValue = TestMessage(counterValue = 30L, stringValue = "hello"),
+            timestamp = 3000L,
+        )
+
+        // Write 4: Update only the string field (counter unchanged)
+        val delta4 = adapter.applyLocalWrite(
+            currentValue = delta3.mergeResult.value,
+            currentNode = delta3.mergeResult.node,
+            currentActors = delta3.actors,
+            newValue = TestMessage(counterValue = 30L, stringValue = "world"),
+            timestamp = 4000L,
+        )
+
+        // Merge with another actor who wrote counter=10
+        val otherDelta = adapter.applyLocalWrite(
+            currentValue = null,
+            currentNode = null,
+            currentActors = null,
+            newValue = TestMessage(counterValue = 10L),
+            timestamp = 1500L,
+        )
+
+        val merged = adapter.resolveConflict(lhs = delta4, rhs = otherDelta)
+
+        // Should be 30 + 10 = 40
+        assertThat(merged.mergeResult.value?.counterValue).isEqualTo(40L)
+    }
+
+    @Test
+    fun `counterValue - writes after merge preserve counter structure`() {
+        // Actor A: counter=10
+        val deltaA = adapter.applyLocalWrite(
+            currentValue = null,
+            currentNode = null,
+            currentActors = null,
+            newValue = TestMessage(counterValue = 10L),
+            timestamp = 1000L,
+        )
+
+        // Actor B: counter=20
+        val deltaB = adapter.applyLocalWrite(
+            currentValue = null,
+            currentNode = null,
+            currentActors = null,
+            newValue = TestMessage(counterValue = 20L),
+            timestamp = 1100L,
+        )
+
+        // Merge A+B = 30
+        val merged = adapter.resolveConflict(lhs = deltaA, rhs = deltaB)
+        assertThat(merged.mergeResult.value?.counterValue).isEqualTo(30L)
+
+        // Actor A continues from merged state: counter=45 (was 30, increment by 15)
+        val deltaA2 = adapter.applyLocalWrite(
+            currentValue = merged.mergeResult.value,
+            currentNode = merged.mergeResult.node,
+            currentActors = merged.actors,
+            newValue = TestMessage(counterValue = 45L),
+            timestamp = 2000L,
+        )
+
+        // Actor A increments again: counter=55 (increment by 10)
+        val deltaA3 = adapter.applyLocalWrite(
+            currentValue = deltaA2.mergeResult.value,
+            currentNode = deltaA2.mergeResult.node,
+            currentActors = deltaA2.actors,
+            newValue = TestMessage(counterValue = 55L),
+            timestamp = 3000L,
+        )
+
+        assertThat(deltaA3.mergeResult.value?.counterValue).isEqualTo(55L)
+
+        // Merge with Actor C: counter=5
+        val deltaC = adapter.applyLocalWrite(
+            currentValue = null,
+            currentNode = null,
+            currentActors = null,
+            newValue = TestMessage(counterValue = 5L),
+            timestamp = 1200L,
+        )
+
+        val finalMerge = adapter.resolveConflict(lhs = deltaA3, rhs = deltaC)
+
+        // Should be 55 + 5 = 60
+        // Actor A's contribution: 10 (original) + 15 + 10 = 35
+        // Actor B's contribution: 20
+        // Actor C's contribution: 5
+        assertThat(finalMerge.mergeResult.value?.counterValue).isEqualTo(60L)
+        with(WireVersionTreeResolver) {
+            assertThat(finalMerge.mergeResult.node?.struct?.fields?.get(31)?.counterValue)
+                .isEqualTo(60L)
+        }
+    }
+
+    @Test
     fun `counterValue - three actors merge correctly`() {
         // Given - three actors with different counter values
         val delta1 = adapter.applyLocalWrite(

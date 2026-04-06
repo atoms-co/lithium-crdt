@@ -51,12 +51,16 @@ interface CounterLocalResolver<T, N, V, C> : CrdtLocalResolver<T, N, V, C> {
 
         val finalVersion = newVersion.ensureAfter(currentNode?.versionValue ?: currentVersion)
 
-        // If currentNode exists: update counter map (multi-actor case)
-        // If currentNode is null: create simple version node (single-actor optimization)
-        val node = currentNode?.plus(
-            value = difference,
-            version = finalVersion,
-        ) ?: createVersionNode(version = finalVersion)
+        val node = currentNode?.let { existing ->
+            // If node exists but lacks counter structure (single-actor optimization),
+            // promote to counter before applying delta — mirrors CounterIncomingResolver
+            val prepared = if (existing.counterActors == 0) {
+                createVersionNodeCounter(existing.versionValue ?: currentVersion, toLong(currentValue))
+            } else {
+                existing
+            }
+            prepared.plus(value = difference, version = finalVersion)
+        } ?: createVersionNode(version = finalVersion)
 
         context.addChange(
             newValue = newValue,

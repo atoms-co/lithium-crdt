@@ -137,7 +137,7 @@ when (strategy) {
 
 ## Try It Interactively
 
-Run our interactive demo app, which simulates three devices editing the same protobuf message, syncing independently, and merging only the fields that changed.
+Run our interactive demo app. It simulates three devices editing the same document, syncing independently, and merging only the fields that changed.
 
 ```bash
 git clone https://github.com/atoms-co/lithium-crdt.git

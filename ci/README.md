@@ -49,19 +49,6 @@ All artifacts are published to Maven Central under the group `co.atoms.lithium.c
 | `crdt-wire` | Wire CRDT implementation | Android/Kotlin |
 | `crdt-wire-data` | Wire-generated protobuf classes | Android/Kotlin |
 
-## Version Management
-
-The version is managed via three properties in `gradle.properties`:
-- `version.major` - Major version (breaking changes)
-- `version.minor` - Minor version (new features, backwards compatible)
-- `version.patch` - Patch version (bug fixes)
-
-Use `scripts/bump-version.sh` to increment versions:
-```bash
-./scripts/bump-version.sh patch   # 1.0.0 → 1.0.1
-./scripts/bump-version.sh minor   # 1.0.5 → 1.1.0
-./scripts/bump-version.sh major   # 1.5.3 → 2.0.0
-```
 
 ## Troubleshooting
 

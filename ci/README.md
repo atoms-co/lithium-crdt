@@ -21,21 +21,21 @@ Builds and tests the library. Runs automatically on:
 4. Run `./gradlew clean build`
 5. Run `./gradlew test`
 
-### release.yml - Bump version and tag. 
-
-Bumps the library version and creates a new git tag, automatically triggering the publish workflow to publish to Maven Central.
-
-How it works:
-1. Run the Release workflow from the Actions tab (or via the API). Provide a `bump` input (patch/minor/major).
-2. The workflow runs `scripts/bump-version.sh` to increment `gradle.properties` and sets `VERSION`.
-3. It commits the updated `gradle.properties`, creates a `v$VERSION` tag, and pushes the tag to `master`.
-4. Pushing the tag triggers `.github/workflows/publish.yml`, which performs the Maven Central publish.
-
-Once the release workflow completes, the publish workflow will be triggered automatically by the created tag.
-
 ### publish.yml — Publish to Maven Central
 
-Publishes library artifacts to Maven Central. Triggered by the release workflow.
+Publishes library artifacts to Maven Central. Triggered automatically when a version tag (`v*`) is pushed.
+
+## Releasing a New Version
+
+Releases are initiated manually by a maintainer using `scripts/release.sh`:
+
+```bash
+./scripts/release.sh patch   # or minor, major
+```
+
+The script ensures you're on a clean, up-to-date `master`, bumps the version, confirms before proceeding, then commits, tags, and pushes, ultimately triggering the publish workflow.
+
+All five modules are always published with the same version.
 
 ## Published Artifacts
 
@@ -62,8 +62,6 @@ Use `scripts/bump-version.sh` to increment versions:
 ./scripts/bump-version.sh minor   # 1.0.5 → 1.1.0
 ./scripts/bump-version.sh major   # 1.5.3 → 2.0.0
 ```
-
-All five modules are always published with the same version.
 
 ## Troubleshooting
 

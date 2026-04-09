@@ -1,8 +1,12 @@
 <div align="center">
 
-<img src="assets/lithium_crdt.svg" alt="Lithium CRDT" width="400" />
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="assets/lithium_crdt.svg" />
+  <source media="(prefers-color-scheme: light)" srcset="assets/lithium_crdt_dark.svg" />
+  <img src="assets/lithium_crdt.svg" alt="Lithium CRDT" width="400" />
+</picture>
 
-**A lightweight structured CRDT implementation with near-zero memory overhead**
+**A lightweight, structured CRDT implementation with near-zero memory overhead**
 
 
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)

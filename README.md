@@ -1,6 +1,6 @@
 <div align="center">
-  
-# lithium-crdt
+
+<img src="assets/lithium_crdt.svg" alt="Lithium CRDT" width="400" />
 
 **A lightweight structured CRDT implementation with near-zero memory overhead**
 

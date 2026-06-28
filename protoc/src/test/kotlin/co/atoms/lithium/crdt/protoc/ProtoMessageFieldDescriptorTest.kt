@@ -7,6 +7,7 @@ import co.atoms.lithium.crdt.test.DeepIdContainer
 import co.atoms.lithium.crdt.test.DeepIdEvent
 import co.atoms.lithium.crdt.test.DeepIdInfo
 import co.atoms.lithium.crdt.test.DeepIdWrapper
+import co.atoms.lithium.crdt.test.NestedMessage
 import co.atoms.lithium.crdt.test.NestedMessageWithId
 import co.atoms.lithium.crdt.test.SinglePathIdContainer
 import co.atoms.lithium.crdt.test.TestMessage
@@ -21,6 +22,7 @@ import co.atoms.lithium.crdt.test.FieldDescriptorEncodingFixtures
 import co.atoms.lithium.crdt.test.FieldDescriptorEncodingFixtures.assertBytesEqual
 import com.google.protobuf.Descriptors
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -736,5 +738,73 @@ class ProtoMessageFieldDescriptorTest {
             .build()
         val extractedId = repeatedIdType.repeatedKeyTransformer(item)
         assertEquals("item-abc", extractedId)
+    }
+
+    @Test
+    fun testIsAbsentNullValueIsAbsent() {
+        val descriptor = ProtoMessageFieldDescriptor(testMessageDescriptor.findFieldByName("stringValue"))
+        assertTrue(descriptor.isAbsent(null))
+    }
+
+    @Test
+    fun testIsAbsentPlainScalarAtDefaultIsAbsent() {
+        assertTrue(ProtoMessageFieldDescriptor(testMessageDescriptor.findFieldByName("stringValue")).isAbsent(""))
+        assertTrue(ProtoMessageFieldDescriptor(testMessageDescriptor.findFieldByName("int32Value")).isAbsent(0))
+        assertTrue(ProtoMessageFieldDescriptor(testMessageDescriptor.findFieldByName("boolValue")).isAbsent(false))
+    }
+
+    @Test
+    fun testIsAbsentPlainScalarWithValueIsSet() {
+        assertFalse(ProtoMessageFieldDescriptor(testMessageDescriptor.findFieldByName("stringValue")).isAbsent("hello"))
+        assertFalse(ProtoMessageFieldDescriptor(testMessageDescriptor.findFieldByName("int32Value")).isAbsent(42))
+        assertFalse(ProtoMessageFieldDescriptor(testMessageDescriptor.findFieldByName("boolValue")).isAbsent(true))
+    }
+
+    @Test
+    fun testIsAbsentOptionalPrimitiveAtDefaultValueIsSet() {
+        // optional fields track presence: a non-null value is set even when it
+        // equals the default (0)
+        val descriptor = ProtoMessageFieldDescriptor(testMessageDescriptor.findFieldByName("primitiveOptionalValue"))
+        assertFalse(descriptor.isAbsent(0))
+    }
+
+    @Test
+    fun testIsAbsentOptionalPrimitiveNullIsAbsent() {
+        val descriptor = ProtoMessageFieldDescriptor(testMessageDescriptor.findFieldByName("primitiveOptionalValue"))
+        assertTrue(descriptor.isAbsent(null))
+    }
+
+    @Test
+    fun testIsAbsentOneOfMemberAtDefaultValueIsSet() {
+        // a oneof member with a value is set, even when the value is the default ""
+        val descriptor = ProtoMessageFieldDescriptor(testMessageDescriptor.findFieldByName("oneOfValue1"))
+        assertFalse(descriptor.isAbsent(""))
+    }
+
+    @Test
+    fun testIsAbsentOneOfMemberNullIsAbsent() {
+        val descriptor = ProtoMessageFieldDescriptor(testMessageDescriptor.findFieldByName("oneOfValue1"))
+        assertTrue(descriptor.isAbsent(null))
+    }
+
+    @Test
+    fun testIsAbsentMessageNullIsAbsentNonNullIsSet() {
+        val descriptor = ProtoMessageFieldDescriptor(testMessageDescriptor.findFieldByName("nestedValue"))
+        assertTrue(descriptor.isAbsent(null))
+        assertFalse(descriptor.isAbsent(NestedMessage.getDefaultInstance()))
+    }
+
+    @Test
+    fun testIsAbsentEmptyMapIsAbsentNonEmptyIsSet() {
+        val descriptor = ProtoMessageFieldDescriptor(testMessageDescriptor.findFieldByName("primitiveMapValue"))
+        assertTrue(descriptor.isAbsent(emptyMap<String, Int>()))
+        assertFalse(descriptor.isAbsent(mapOf("a" to 1)))
+    }
+
+    @Test
+    fun testIsAbsentEmptyListIsAbsentNonEmptyIsSet() {
+        val descriptor = ProtoMessageFieldDescriptor(testMessageDescriptor.findFieldByName("primitiveListValue"))
+        assertTrue(descriptor.isAbsent(emptyList<Int>()))
+        assertFalse(descriptor.isAbsent(listOf(1, 2, 3)))
     }
 }

@@ -301,15 +301,29 @@ When building a message's version node, the parent node's version is set to the 
 
 ```kotlin
 // After processing all fields:
-val parentVersion = fieldVersions.values.minVersion(currentVersion)
+val parentVersion = fieldVersions.values.minVersion(seedVersion)
 
 // Individual fields keep their specific versions in the fields map
-// Parent version = oldest modification that defines current shape
+// Parent version = floor of child versions; seedVersion is the fallback
+// (local write: current version; incoming merge: min(local, incoming))
 ```
 
 This differs from `maxVersion` (used for conflict resolution) because:
 - `minVersion` answers: "What's the oldest version defining this structure?"
 - `maxVersion` answers: "What's the newest modification anywhere in this subtree?"
+
+#### Never-Set vs Reset vs Inherited
+
+Three field states look alike but resolve differently during incoming merge. The resolver tells them apart with `isAbsent(value)` (a pure value check — null, empty collection, or default scalar) combined with whether the field has its own version node:
+
+| Has node? | `isAbsent`? | Meaning | Merge treatment |
+|-----------|-------------|---------|-----------------|
+| no  | true  | **never set** | pinned to `minVersion`, so it can't overwrite a real value |
+| yes | true  | **reset** (cleared to default) | a real versioned write; kept out of leaf-collapse via `absentResultTags` |
+| no  | false | set, inheriting the parent baseline | uses the parent version |
+| yes | false | set with its own version | uses that version |
+
+Without the never-set rule, a field that was never written would inherit the parent version and could clobber a populated field on another replica whenever its parent version happened to be higher. `absentResultTags` is the dual protection: it keeps a *reset* leaf (empty value, real version) from being collapsed and later misread as never-set.
 
 ### 4. Resolution Strategy Taxonomy
 

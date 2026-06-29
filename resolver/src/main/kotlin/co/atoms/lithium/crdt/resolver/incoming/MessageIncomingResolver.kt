@@ -123,6 +123,9 @@ interface MessageIncomingResolver<M, S, B : MessageBuilder<M, S>, N, V, C> :
         var resolution: ResolutionStrategy = NO_CHANGE
         // No order required for field merging
         val resultFields = HashMap<Int, N>(fields.size)
+        // Tags whose resolved value is absent (empty/default). Used below to protect
+        // reset/tombstone nodes from the leaf-collapse optimization.
+        val absentResultTags = HashSet<Int>()
         // Group OneOf fields for special handling
         val oneOfResults = mutableMapOf<String, MutableList<OneOf<M, B, ResolutionStrategy, N, V, C>>>()
 
@@ -133,21 +136,37 @@ interface MessageIncomingResolver<M, S, B : MessageBuilder<M, S>, N, V, C> :
             val oneOfName = field.binding.oneOfName
             val localFieldNode = localFields[fieldBinding.tag]
             val incomingFieldNode = incomingFields[fieldBinding.tag]
+            val localFieldValue = fieldBinding[localValue]
+            val incomingFieldValue = fieldBinding[incomingValue]
+
+            // A field with no explicit node and an absent value was never written on that
+            // side. It must not inherit the (possibly higher) parent version and overwrite
+            // the other side's real write - treat it as the lowest version instead.
+            val localNeverSet = localFieldNode == null && fieldBinding.isAbsent(localFieldValue)
+            val incomingNeverSet = incomingFieldNode == null && fieldBinding.isAbsent(incomingFieldValue)
+            // Never written on either side: nothing to merge, leave it unset (no node).
+            if (localNeverSet && incomingNeverSet) return@forEach
+
             val childLocalVersion = localFieldNode?.versionValue
+                ?: if (localNeverSet) minVersion else localVersion
             val childIncomingVersion = incomingFieldNode?.versionValue
+                ?: if (incomingNeverSet) minVersion else incomingVersion
 
             // Delegate to field-specific resolver (primitive, message, or collection)
             val fieldResult = context.withPath(versionTreeResolver.createPathComponentField(fieldBinding.tag)) {
                 field.incomingResolver.resolveConflict(
-                    localValue = fieldBinding[localValue],
+                    localValue = localFieldValue,
                     localNode = localFieldNode,
-                    // Use field's version if available, otherwise inherit from message
-                    localVersion = childLocalVersion ?: localVersion,
-                    incomingValue = fieldBinding[incomingValue],
+                    localVersion = childLocalVersion,
+                    incomingValue = incomingFieldValue,
                     incomingNode = incomingFieldNode,
-                    incomingVersion = childIncomingVersion ?: incomingVersion,
+                    incomingVersion = childIncomingVersion,
                     context = context,
                 )
+            }
+
+            if (fieldBinding.isAbsent(fieldResult.value)) {
+                absentResultTags.add(fieldBinding.tag)
             }
 
             if (oneOfName != null) {
@@ -178,6 +197,9 @@ interface MessageIncomingResolver<M, S, B : MessageBuilder<M, S>, N, V, C> :
 
         // Resolve OneOf groups - only highest versioned field keeps its value
         resolved(oneOfResults) { (fieldBinding, fieldResult) ->
+            if (fieldBinding.isAbsent(fieldResult.value)) {
+                absentResultTags.add(fieldBinding.tag)
+            }
             resolution += builder.setValue(
                 fieldBinding = fieldBinding,
                 fieldResult = fieldResult,
@@ -197,10 +219,15 @@ interface MessageIncomingResolver<M, S, B : MessageBuilder<M, S>, N, V, C> :
                 LOCAL -> localNode ?: createVersionNode(localVersion)
                 INCOMING -> incomingNode ?: createVersionNode(incomingVersion)
                 MERGED_VALUES -> {
-                    val version = resultFields.values.minVersion(localVersion.coerceAtLeast(incomingVersion))
-                    // Optimization: remove leaf nodes with same version as parent
-                    // They inherit the parent version implicitly
-                    resultFields.entries.removeAll { it.value.versionValue == version && it.value.isLeaf() }
+                    val version = resultFields.values.minVersion(
+                        if (localVersion < incomingVersion) localVersion else incomingVersion
+                    )
+                    // Optimization: a present-valued leaf at the parent version inherits it
+                    // implicitly, so drop it. Keep absent-valued leaves (reset tombstones) so
+                    // their version survives and isn't later mistaken for "never set".
+                    resultFields.entries.removeAll { (tag, node) ->
+                        node.isLeaf() && node.versionValue == version && tag !in absentResultTags
+                    }
                     createVersionNodeStruct(
                         version = version,
                         fields = resultFields

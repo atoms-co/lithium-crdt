@@ -255,8 +255,10 @@ class ProtoCrdtDeltaResolverTest {
             incomingVersionVector = incomingDelta.actors.versionVectorMap,
         )
 
-        // Only fields with different values between local and incoming should emit changes
-        assertThat(delta.changes.size).isEqualTo(7)
+        // Only fields with different values between local and incoming should emit changes.
+        // Here just stringValue (13) and int32Value (3) differ; never-set fields that are
+        // absent on both sides must not emit spurious null changes.
+        assertThat(delta.changes.size).isEqualTo(2)
 
         val changesByField = delta.changes.associateBy { it.pathComponents.first() }
 

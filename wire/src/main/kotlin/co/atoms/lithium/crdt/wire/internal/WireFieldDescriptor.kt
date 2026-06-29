@@ -213,6 +213,26 @@ internal class WireFieldDescriptor<M : Message<M, B>, B : Message.Builder<M, B>>
 
     override fun get(message: M): Any? = actual[message]
 
+    override fun isAbsent(value: Any?): Boolean {
+        if (value == null) return true
+        return when (collectionType) {
+            is CollectionType.Map -> (value as Map<*, *>).isEmpty()
+            is CollectionType.Repeated,
+            is CollectionType.RepeatedId -> (value as List<*>).isEmpty()
+            null -> when (valueType) {
+                ValueType.REQUIRED -> {
+                    // if oneOfName is set then the value cannot be absent
+                    if (oneOfName != null) return false
+                    // if default value, return value absent as true else false
+                    value == actual.singleAdapter.identity
+                }
+                // reaching here means it was set (null was already handled above)
+                ValueType.OPTIONAL,
+                ValueType.MESSAGE -> false
+            }
+        }
+    }
+
     override fun toString(): String = "$parentMessageType.${actual.name} = $tag;(${actual.adapter.type})"
 }
 

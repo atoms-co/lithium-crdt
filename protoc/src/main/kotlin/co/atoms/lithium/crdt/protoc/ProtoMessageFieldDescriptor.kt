@@ -566,6 +566,26 @@ internal class ProtoMessageFieldDescriptor(internal val fieldDescriptor: FieldDe
         return value
     }
 
+    override fun isAbsent(value: Any?): Boolean {
+        if (value == null) return true
+        return when (collectionType) {
+            is CollectionType.Map -> (value as Map<*, *>).isEmpty()
+            is CollectionType.Repeated,
+            is CollectionType.RepeatedId -> (value as List<*>).isEmpty()
+            null -> when (valueType) {
+                ValueType.REQUIRED -> {
+                    // if oneOfName is set then the value cannot be absent
+                    if (oneOfName != null) return false
+                    // if default value, return value absent as true else false
+                    value == valueDescriptor.defaultValue
+                }
+                // reaching here means it was set (null was already handled above)
+                ValueType.OPTIONAL,
+                ValueType.MESSAGE -> false
+            }
+        }
+    }
+
     override fun toString(): String {
         return "${fieldDescriptor.name} = $tag; (${fieldDescriptor.javaType})"
     }

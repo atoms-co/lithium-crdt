@@ -4,7 +4,11 @@ import co.atoms.lithium.crdt.test.EnumSample
 import co.atoms.lithium.crdt.test.NestedMessage
 import co.atoms.lithium.crdt.test.NestedMessageWithId
 import co.atoms.lithium.crdt.test.TestMessage
+import co.atoms.lithium.crdt.data.Actors
+import co.atoms.lithium.crdt.data.PathComponent
 import co.atoms.lithium.crdt.data.Version
+import co.atoms.lithium.crdt.data.VersionNode
+import co.atoms.lithium.crdt.resolver.ResolverDeltaResult
 import co.atoms.lithium.crdt.resolver.version.ResolutionStrategy
 import com.google.common.truth.Truth.assertThat
 import org.junit.jupiter.api.Test
@@ -494,4 +498,206 @@ class ProtoCrdtIncomingResolverTest {
         assertThat(merged?.enumMapValueMap).containsEntry("key1", EnumSample.UNKNOWN)
         assertThat(merged?.enumMapValueMap).containsEntry("key2", EnumSample.VALUE2)
     }
+
+    @Test
+    fun `unset field does not overwrite populated field when parent version is higher`() {
+        // Device A sets stringValue (field 13) earlier; Device B sets only int32Value (field 3)
+        // later, so its never-set stringValue would inherit B's higher parent version.
+        val deviceA = write(TestMessage.newBuilder().setStringValue("hello").build(), timestamp = 1)
+        val deviceB = write(TestMessage.newBuilder().setInt32Value(42).build(), timestamp = 5)
+
+        val merged = merge(deviceA, deviceB).mergeResult
+
+        assertThat(merged.value?.int32Value).isEqualTo(42)
+        assertThat(merged.value?.stringValue).isEqualTo("hello")
+    }
+
+    @Test
+    fun `unset field does not overwrite populated field regardless of merge order`() {
+        val deviceA = write(TestMessage.newBuilder().setStringValue("hello").build(), timestamp = 1)
+        val deviceB = write(TestMessage.newBuilder().setInt32Value(42).build(), timestamp = 5)
+
+        val merged = merge(deviceB, deviceA).mergeResult
+
+        assertThat(merged.value?.int32Value).isEqualTo(42)
+        assertThat(merged.value?.stringValue).isEqualTo("hello")
+    }
+
+    @Test
+    fun `reset to default is a real write and survives the collapse optimization`() {
+        val base = write(
+            TestMessage.newBuilder().setStringValue("hello").setInt32Value(1).build(),
+            timestamp = 100,
+        )
+        // Reset stringValue back to default (""), keeping int32Value.
+        val reset = write(
+            TestMessage.newBuilder().setInt32Value(1).build(),
+            timestamp = 300,
+            previous = base,
+        )
+
+        val field13 = reset.mergeResult.node?.struct?.fieldsMap?.get(13)
+        assertThat(field13).isNotNull()
+        assertThat(field13?.version?.timestamp).isEqualTo(300)
+    }
+
+    @Test
+    fun `reset wins over an older value on merge`() {
+        val base = write(
+            TestMessage.newBuilder().setStringValue("hello").setInt32Value(1).build(),
+            timestamp = 100,
+        )
+        val deviceA = write(
+            TestMessage.newBuilder().setInt32Value(1).build(),
+            timestamp = 300,
+            previous = base,
+        )
+
+        assertThat(merge(base, deviceA).mergeResult.value?.stringValue).isEqualTo("")
+        assertThat(merge(deviceA, base).mergeResult.value?.stringValue).isEqualTo("")
+    }
+
+    @Test
+    fun `merged parent version is the floor of the two sides`() {
+        val a = write(TestMessage.newBuilder().setStringValue("a").build(), timestamp = 10)
+        val b = write(TestMessage.newBuilder().setInt32Value(1).build(), timestamp = 5)
+
+        val merged = merge(a, b).mergeResult
+
+        assertThat(merged.value?.stringValue).isEqualTo("a")
+        assertThat(merged.value?.int32Value).isEqualTo(1)
+        val node = requireNotNull(merged.node)
+        // Parent baseline is the floor (5), not the max (10).
+        assertThat(node.version.timestamp).isEqualTo(5)
+        // The field at the floor collapses into the parent; the higher field keeps its leaf.
+        assertThat(node.struct.fieldsMap.containsKey(3)).isFalse()
+        assertThat(node.struct.fieldsMap[13]?.version?.timestamp).isEqualTo(10)
+    }
+
+    @Test
+    fun `clean local win preserves the winning version and does not apply the floor`() {
+        val base = write(
+            TestMessage.newBuilder().setStringValue("old").setInt32Value(1).build(),
+            timestamp = 5,
+        )
+        val local = write(
+            TestMessage.newBuilder().setStringValue("new").setInt32Value(1).build(),
+            timestamp = 20,
+            previous = base,
+        )
+
+        val merged = merge(local, base).mergeResult
+
+        assertThat(merged.value?.stringValue).isEqualTo("new")
+        assertThat(merged.node).isEqualTo(local.mergeResult.node)
+    }
+
+    @Test
+    fun `nested message merge applies the floor independently at each level`() {
+        val a = write(
+            TestMessage.newBuilder()
+                .setNestedValue(NestedMessage.newBuilder().setStringValue("n").build())
+                .build(),
+            timestamp = 10,
+        )
+        val b = write(
+            TestMessage.newBuilder()
+                .setNestedValue(NestedMessage.newBuilder().setIntValue(7).build())
+                .build(),
+            timestamp = 4,
+        )
+
+        val merged = merge(a, b).mergeResult
+
+        assertThat(merged.value?.nestedValue?.stringValue).isEqualTo("n")
+        assertThat(merged.value?.nestedValue?.intValue).isEqualTo(7)
+        val node = requireNotNull(merged.node)
+        assertThat(node.version.timestamp).isEqualTo(4)
+        assertThat(node.struct.fieldsMap[16]?.version?.timestamp).isEqualTo(4)
+    }
+
+    @Test
+    fun `reset leaf at the parent floor is protected from collapse`() {
+        val base = write(
+            TestMessage.newBuilder().setStringValue("hello").setInt32Value(1).build(),
+            timestamp = 100,
+        )
+        val deviceA = write(
+            TestMessage.newBuilder().setInt32Value(1).build(),
+            timestamp = 150,
+            previous = base,
+        )
+        val deviceB = write(
+            TestMessage.newBuilder().setStringValue("hello").setInt32Value(2).build(),
+            timestamp = 200,
+            previous = base,
+        )
+
+        val merged = merge(deviceA, deviceB).mergeResult
+
+        // The reset wins over the stale "hello" -> stringValue stays cleared.
+        assertThat(merged.value?.stringValue).isEqualTo("")
+        // And the reset keeps an explicit node (not collapsed), preserving its version.
+        val resetNode = merged.node?.struct?.fieldsMap?.get(13)
+        assertThat(resetNode).isNotNull()
+        assertThat(resetNode?.version?.timestamp).isEqualTo(150)
+    }
+
+    @Test
+    fun `equal timestamps converge via deterministic actor tie-break regardless of order`() {
+        val a = write(TestMessage.newBuilder().setStringValue("from-a").build(), timestamp = 50)
+        val b = write(TestMessage.newBuilder().setStringValue("from-b").build(), timestamp = 50)
+
+        val ab = merge(a, b).mergeResult
+        val ba = merge(b, a).mergeResult
+
+        assertThat(ab.value).isEqualTo(ba.value)
+        assertThat(ab.node).isEqualTo(ba.node)
+    }
+
+    @Test
+    fun `merge converges regardless of order when a field is equal-valued at different inherited versions`() {
+        val a = write(
+            TestMessage.newBuilder().setStringValue("same").setInt32Value(1).build(),
+            timestamp = 10,
+        )
+        val b = write(
+            TestMessage.newBuilder().setStringValue("same").setInt64Value(2).build(),
+            timestamp = 5,
+        )
+        val c = write(
+            TestMessage.newBuilder().setStringValue("same").setBoolValue(true).build(),
+            timestamp = 7,
+        )
+
+        val abThenC = merge(merge(a, b), c).mergeResult
+        val aThenBC = merge(a, merge(b, c)).mergeResult
+
+        assertThat(abThenC.value).isEqualTo(aThenBC.value)
+        assertThat(abThenC.node).isEqualTo(aThenBC.node)
+    }
+
+    private fun write(
+        value: TestMessage,
+        timestamp: Long,
+        previous: ResolverDeltaResult<TestMessage, VersionNode, Version, *, PathComponent, Actors>? = null,
+    ) = resolver.applyLocalWrite(
+        currentValue = previous?.mergeResult?.value,
+        currentNode = previous?.mergeResult?.node,
+        currentActors = previous?.actors,
+        newValue = value,
+        timestamp = timestamp,
+    )
+
+    private fun merge(
+        local: ResolverDeltaResult<TestMessage, VersionNode, Version, *, PathComponent, Actors>,
+        incoming: ResolverDeltaResult<TestMessage, VersionNode, Version, *, PathComponent, Actors>,
+    ) = resolver.resolveConflict(
+        localValue = local.mergeResult.value,
+        localNode = local.mergeResult.node,
+        localActors = local.actors,
+        incomingValue = incoming.mergeResult.value,
+        incomingNode = requireNotNull(incoming.mergeResult.node),
+        incomingVersionVector = incoming.actors.versionVectorMap,
+    )
 }

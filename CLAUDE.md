@@ -260,6 +260,8 @@ The library separates local writes from incoming conflict resolution:
 
 **Version Node Inheritance**: The `Struct.fields` map only contains entries differing from base version, not every field. Fields without explicit entries inherit the base version from parent `VersionNode.version`. This provides massive memory savings for typical usage where documents have many fields but only few update over time.
 
+**Merge-time exception:** during an incoming merge, a field that was never written — no explicit node *and* an empty/default value (`isAbsent`) — is pinned to `minVersion` instead of inheriting the parent version, so an unwritten field cannot overwrite a populated value on another replica. A *reset* (empty value but a real version node) is preserved, not treated as never-set.
+
 **OneOf Field Constraints**: Wire and protoc implementations must enforce protobuf OneOf invariant—only one field in a group can have value. Setting any OneOf field automatically tombstones other fields in same group at version tree level.
 
 **Resolver Caching**: Both `WireCrdtResolverProvider` and `CrdtMessageResolverProvider` use `ConcurrentHashMap` caching to amortize expensive field introspection (annotations or reflection) across operations.

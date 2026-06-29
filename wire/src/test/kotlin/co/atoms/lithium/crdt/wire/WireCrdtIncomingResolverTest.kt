@@ -393,6 +393,275 @@ class WireCrdtIncomingResolverTest {
         assertThat(conflict.value?.primitiveOptionalValue).isEqualTo(100)
         assertThat(conflict.value?.nestedOptionalValue).isEqualTo(NestedMessage("device_b", 200))
     }
+
+    @Test
+    fun `unset field does not overwrite populated field when parent version is higher`() {
+        // Device A: created earlier, sets stringValue (field 13).
+        val deviceA = adapter.applyLocalWrite(
+            currentValue = null,
+            currentNode = null,
+            currentActors = null,
+            newValue = TestMessage(stringValue = "hello"),
+            timestamp = 1,
+        )
+
+        // Device B: created later (higher parent version), only sets int32Value (field 3).
+        // stringValue is never set on B, so it inherits B's higher parent version.
+        val deviceB = adapter.applyLocalWrite(
+            currentValue = null,
+            currentNode = null,
+            currentActors = null,
+            newValue = TestMessage(int32Value = 42),
+            timestamp = 5,
+        )
+
+        val merged = adapter.resolveConflict(lhs = deviceA, rhs = deviceB).mergeResult
+
+        // int32Value was genuinely set on B and should be present.
+        assertThat(merged.value?.int32Value).isEqualTo(42)
+        // stringValue was never set on B, so A's real write must survive.
+        assertThat(merged.value?.stringValue).isEqualTo("hello")
+    }
+
+    @Test
+    fun `unset field does not overwrite populated field regardless of merge order`() {
+        val deviceA = adapter.applyLocalWrite(
+            currentValue = null,
+            currentNode = null,
+            currentActors = null,
+            newValue = TestMessage(stringValue = "hello"),
+            timestamp = 1,
+        )
+        val deviceB = adapter.applyLocalWrite(
+            currentValue = null,
+            currentNode = null,
+            currentActors = null,
+            newValue = TestMessage(int32Value = 42),
+            timestamp = 5,
+        )
+
+        // Swap local/incoming: B (higher parent version) as local, A as incoming.
+        val merged = adapter.resolveConflict(lhs = deviceB, rhs = deviceA).mergeResult
+
+        assertThat(merged.value?.int32Value).isEqualTo(42)
+        assertThat(merged.value?.stringValue).isEqualTo("hello")
+    }
+
+    @Test
+    fun `reset to default is a real write and survives the collapse optimization`() {
+        // Base: two fields set so the parent stays low.
+        val base = adapter.applyLocalWrite(
+            currentValue = null,
+            currentNode = null,
+            currentActors = null,
+            newValue = TestMessage(stringValue = "hello", int32Value = 1),
+            timestamp = 100,
+        )
+
+        // Reset stringValue (field 13) back to default.
+        val reset = adapter.applyLocalWrite(
+            currentValue = base.mergeResult.value,
+            currentNode = base.mergeResult.node,
+            currentActors = base.actors,
+            newValue = TestMessage(stringValue = "", int32Value = 1),
+            timestamp = 300,
+        )
+
+        // The reset must leave an explicit node for field 13 (not collapsed away).
+        val field13 = reset.mergeResult.node?.struct?.fields?.get(13)
+        assertThat(field13).isNotNull()
+        assertThat(field13?.version?.timestamp).isEqualTo(300)
+    }
+
+    @Test
+    fun `reset wins over an older value on merge`() {
+        val base = adapter.applyLocalWrite(
+            currentValue = null,
+            currentNode = null,
+            currentActors = null,
+            newValue = TestMessage(stringValue = "hello", int32Value = 1),
+            timestamp = 100,
+        )
+
+        // Device A resets stringValue at a later time.
+        val deviceA = adapter.applyLocalWrite(
+            currentValue = base.mergeResult.value,
+            currentNode = base.mergeResult.node,
+            currentActors = base.actors,
+            newValue = TestMessage(stringValue = "", int32Value = 1),
+            timestamp = 300,
+        )
+
+        // Device B keeps the original "hello" (base, untouched).
+        // Merge: A's reset (newer write) should win -> stringValue cleared.
+        val merged = adapter.resolveConflict(lhs = base, rhs = deviceA).mergeResult
+        assertThat(merged.value?.stringValue).isEqualTo("")
+
+        // And order-independent.
+        val mergedSwapped = adapter.resolveConflict(lhs = deviceA, rhs = base).mergeResult
+        assertThat(mergedSwapped.value?.stringValue).isEqualTo("")
+    }
+
+    @Test
+    fun `merged parent version is the floor of the two sides`() {
+        val a = adapter.applyLocalWrite(
+            currentValue = null, currentNode = null, currentActors = null,
+            newValue = TestMessage(stringValue = "a"), timestamp = 10,
+        )
+        val b = adapter.applyLocalWrite(
+            currentValue = null, currentNode = null, currentActors = null,
+            newValue = TestMessage(int32Value = 1), timestamp = 5,
+        )
+
+        val merged = adapter.resolveConflict(lhs = a, rhs = b).mergeResult
+
+        // Both real writes survive.
+        assertThat(merged.value?.stringValue).isEqualTo("a")
+        assertThat(merged.value?.int32Value).isEqualTo(1)
+        // Parent baseline is the floor (5), not the max (10).
+        assertThat(merged.node?.version?.timestamp).isEqualTo(5)
+        // The field sitting at the floor collapses into the parent (no explicit node)...
+        assertThat(merged.node?.struct?.fields?.get(3)).isNull()
+        // ...while the higher field keeps its own leaf node at its real version.
+        assertThat(merged.node?.struct?.fields?.get(13)?.version?.timestamp).isEqualTo(10)
+    }
+
+    @Test
+    fun `clean local win preserves the winning version and does not apply the floor`() {
+        // Older shared base so a real merge is possible, then local advances both fields.
+        val base = adapter.applyLocalWrite(
+            currentValue = null, currentNode = null, currentActors = null,
+            newValue = TestMessage(stringValue = "old", int32Value = 1), timestamp = 5,
+        )
+        val local = adapter.applyLocalWrite(
+            currentValue = base.mergeResult.value,
+            currentNode = base.mergeResult.node,
+            currentActors = base.actors,
+            newValue = TestMessage(stringValue = "new", int32Value = 1), timestamp = 20,
+        )
+
+        // Incoming is the untouched base (strictly older on the only differing field).
+        val merged = adapter.resolveConflict(lhs = local, rhs = base).mergeResult
+
+        // Local strictly wins, so its node is reused as-is (version 20 preserved).
+        assertThat(merged.value?.stringValue).isEqualTo("new")
+        assertThat(merged.node).isEqualTo(local.mergeResult.node)
+    }
+
+    @Test
+    fun `nested message merge applies the floor independently at each level`() {
+        val a = adapter.applyLocalWrite(
+            currentValue = null, currentNode = null, currentActors = null,
+            newValue = TestMessage(nestedValue = NestedMessage(stringValue = "n")),
+            timestamp = 10,
+        )
+        val b = adapter.applyLocalWrite(
+            currentValue = null, currentNode = null, currentActors = null,
+            newValue = TestMessage(nestedValue = NestedMessage(intValue = 7)),
+            timestamp = 4,
+        )
+
+        val merged = adapter.resolveConflict(lhs = a, rhs = b).mergeResult
+
+        // Both nested writes survive the merge.
+        assertThat(merged.value?.nestedValue?.stringValue).isEqualTo("n")
+        assertThat(merged.value?.nestedValue?.intValue).isEqualTo(7)
+        // Top-level parent floor is the lower timestamp.
+        assertThat(merged.node?.version?.timestamp).isEqualTo(4)
+        // The nested message's own parent floor is also the lower timestamp,
+        // not inflated by the sibling's higher version.
+        val nestedNode = merged.node?.struct?.fields?.get(16)
+        assertThat(nestedNode?.version?.timestamp).isEqualTo(4)
+    }
+
+    @Test
+    fun `reset leaf at the parent floor is protected from collapse`() {
+        val base = adapter.applyLocalWrite(
+            currentValue = null, currentNode = null, currentActors = null,
+            newValue = TestMessage(stringValue = "hello", int32Value = 1), timestamp = 100,
+        )
+        // Device A clears stringValue (real reset write) at an older time than B's edit.
+        val deviceA = adapter.applyLocalWrite(
+            currentValue = base.mergeResult.value,
+            currentNode = base.mergeResult.node,
+            currentActors = base.actors,
+            newValue = TestMessage(stringValue = "", int32Value = 1), timestamp = 150,
+        )
+        // Device B advances int32Value to a higher version, branching from the same base.
+        val deviceB = adapter.applyLocalWrite(
+            currentValue = base.mergeResult.value,
+            currentNode = base.mergeResult.node,
+            currentActors = base.actors,
+            newValue = TestMessage(stringValue = "hello", int32Value = 2), timestamp = 200,
+        )
+
+        val merged = adapter.resolveConflict(lhs = deviceA, rhs = deviceB).mergeResult
+
+        // The reset wins over the stale "hello" -> stringValue stays cleared.
+        assertThat(merged.value?.stringValue).isEqualTo("")
+        // And the reset keeps an explicit node (not collapsed), preserving its version.
+        val resetNode = merged.node?.struct?.fields?.get(13)
+        assertThat(resetNode).isNotNull()
+        assertThat(resetNode?.version?.timestamp).isEqualTo(150)
+    }
+
+    @Test
+    fun `equal timestamps converge via deterministic actor tie-break regardless of order`() {
+        val a = adapter.applyLocalWrite(
+            currentValue = null, currentNode = null, currentActors = null,
+            newValue = TestMessage(stringValue = "from-a"), timestamp = 50,
+        )
+        val b = adapter.applyLocalWrite(
+            currentValue = null, currentNode = null, currentActors = null,
+            newValue = TestMessage(stringValue = "from-b"), timestamp = 50,
+        )
+
+        val ab = adapter.resolveConflict(lhs = a, rhs = b).mergeResult
+        val ba = adapter.resolveConflict(lhs = b, rhs = a).mergeResult
+
+        // Same winner and same version tree no matter the merge order.
+        assertThat(ab.value).isEqualTo(ba.value)
+        assertThat(ab.node).isEqualTo(ba.node)
+    }
+
+    @Test
+    fun `merge converges regardless of order when a field is equal-valued at different inherited versions`() {
+        // Three independent origins. stringValue="same" on all (equal value), but each
+        // device's parent baseline is a different version, so the inherited stringValue
+        // sits at a different version on each side. Each device also sets one other field.
+        val a = adapter.applyLocalWrite(
+            currentValue = null, currentNode = null, currentActors = null,
+            newValue = TestMessage(stringValue = "same", int32Value = 1),
+            timestamp = 10,
+        )
+        val b = adapter.applyLocalWrite(
+            currentValue = null, currentNode = null, currentActors = null,
+            newValue = TestMessage(stringValue = "same", int64Value = 2),
+            timestamp = 5,
+        )
+        val c = adapter.applyLocalWrite(
+            currentValue = null, currentNode = null, currentActors = null,
+            newValue = TestMessage(stringValue = "same", boolValue = true),
+            timestamp = 7,
+        )
+
+        // (A . B) . C
+        val abThenC = adapter.resolveConflict(
+            lhs = adapter.resolveConflict(lhs = a, rhs = b),
+            rhs = c,
+        ).mergeResult
+
+        // A . (B . C)
+        val aThenBC = adapter.resolveConflict(
+            lhs = a,
+            rhs = adapter.resolveConflict(lhs = b, rhs = c),
+        ).mergeResult
+
+        // Values converge.
+        assertThat(abThenC.value).isEqualTo(aThenBC.value)
+        // And so do the version trees - this is what protects future merges.
+        assertThat(abThenC.node).isEqualTo(aThenBC.node)
+    }
 }
 
 fun <T, S1, S2> WireCrdtMessageResolver<T>.resolveConflict(

@@ -144,6 +144,8 @@ Critical optimization: `Struct.fields` map only contains entries differing from 
 
 **Pattern:** Fields without explicit entries inherit the base version from parent `VersionNode.version`, providing massive memory savings for typical CRDT usage where documents are created with many fields at once but only few fields update over time.
 
+> **Merge-time exception:** during an incoming merge, a never-written field (no explicit node *and* an empty/default value) is pinned to `minVersion` rather than inheriting the parent, so it cannot overwrite a populated value on another replica. See `resolver/README.md` → "Never-Set vs Reset vs Inherited".
+
 **Complexity:** O(m) space overhead where m = modified field count (not total field count F)
 
 ### 5. Fast Sync with Actors Version Vector

@@ -7,6 +7,7 @@ import co.atoms.lithium.crdt.test.DeepIdContainer
 import co.atoms.lithium.crdt.test.DeepIdEvent
 import co.atoms.lithium.crdt.test.DeepIdInfo
 import co.atoms.lithium.crdt.test.DeepIdWrapper
+import co.atoms.lithium.crdt.test.NestedMessage
 import co.atoms.lithium.crdt.test.NestedMessageWithId
 import co.atoms.lithium.crdt.test.SinglePathIdContainer
 import co.atoms.lithium.crdt.test.TestMessage
@@ -911,5 +912,73 @@ class WireFieldDescriptorTest {
         assertFailsWith<IllegalStateException> {
             repeatedIdType.repeatedKeyTransformer(eventWithNullInfo)
         }
+    }
+
+    @Test
+    fun testIsAbsentNullValueIsAbsent() {
+        val descriptor = getFieldDescriptor("stringValue")
+        assertThat(descriptor.isAbsent(null)).isTrue()
+    }
+
+    @Test
+    fun testIsAbsentPlainScalarAtDefaultIsAbsent() {
+        assertThat(getFieldDescriptor("stringValue").isAbsent("")).isTrue()
+        assertThat(getFieldDescriptor("int32Value").isAbsent(0)).isTrue()
+        assertThat(getFieldDescriptor("boolValue").isAbsent(false)).isTrue()
+    }
+
+    @Test
+    fun testIsAbsentPlainScalarWithValueIsSet() {
+        assertThat(getFieldDescriptor("stringValue").isAbsent("hello")).isFalse()
+        assertThat(getFieldDescriptor("int32Value").isAbsent(42)).isFalse()
+        assertThat(getFieldDescriptor("boolValue").isAbsent(true)).isFalse()
+    }
+
+    @Test
+    fun testIsAbsentOptionalPrimitiveAtDefaultValueIsSet() {
+        // optional fields track presence: a non-null value is set even when it
+        // equals the default (0)
+        val descriptor = getFieldDescriptor("primitiveOptionalValue")
+        assertThat(descriptor.isAbsent(0)).isFalse()
+    }
+
+    @Test
+    fun testIsAbsentOptionalPrimitiveNullIsAbsent() {
+        val descriptor = getFieldDescriptor("primitiveOptionalValue")
+        assertThat(descriptor.isAbsent(null)).isTrue()
+    }
+
+    @Test
+    fun testIsAbsentOneOfMemberAtDefaultValueIsSet() {
+        // a oneof member with a value is set, even when the value is the default ""
+        val descriptor = getFieldDescriptor("oneOfValue1")
+        assertThat(descriptor.isAbsent("")).isFalse()
+    }
+
+    @Test
+    fun testIsAbsentOneOfMemberNullIsAbsent() {
+        val descriptor = getFieldDescriptor("oneOfValue1")
+        assertThat(descriptor.isAbsent(null)).isTrue()
+    }
+
+    @Test
+    fun testIsAbsentMessageNullIsAbsentNonNullIsSet() {
+        val descriptor = getFieldDescriptor("nestedValue")
+        assertThat(descriptor.isAbsent(null)).isTrue()
+        assertThat(descriptor.isAbsent(NestedMessage())).isFalse()
+    }
+
+    @Test
+    fun testIsAbsentEmptyMapIsAbsentNonEmptyIsSet() {
+        val descriptor = getFieldDescriptor("primitiveMapValue")
+        assertThat(descriptor.isAbsent(emptyMap<String, Int>())).isTrue()
+        assertThat(descriptor.isAbsent(mapOf("a" to 1))).isFalse()
+    }
+
+    @Test
+    fun testIsAbsentEmptyListIsAbsentNonEmptyIsSet() {
+        val descriptor = getFieldDescriptor("primitiveListValue")
+        assertThat(descriptor.isAbsent(emptyList<Int>())).isTrue()
+        assertThat(descriptor.isAbsent(listOf(1, 2, 3))).isFalse()
     }
 }

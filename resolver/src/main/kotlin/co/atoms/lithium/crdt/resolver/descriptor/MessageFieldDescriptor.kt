@@ -30,9 +30,13 @@ interface MessageFieldDescriptor<in M, in B, V> {
      *
      * Otherwise the value is treated as set, and this returns false.
      *
+     * The default implementation only detects `null`, since this generic interface
+     * cannot inspect the shape of an arbitrary value. Implementations that need
+     * empty-collection or default-scalar detection (e.g. Wire, protoc) should override.
+     *
      * @return true if the value is empty, false if it holds a real value.
      */
-    fun isAbsent(value: V?): Boolean
+    fun isAbsent(value: V?): Boolean = value == null
 
     companion object {
         const val MAX_TOMBSTONE_DEFAULT = 1024

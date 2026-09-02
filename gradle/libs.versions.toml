@@ -3,7 +3,7 @@ kotlin = "2.2.21"
 measured = "0.4.2"
 protobuf = "4.32.0"
 protobufPlugin = "0.9.5"
-wire = "5.4.0"
+wire = "6.4.7"
 junit = "5.10.2"
 coroutines = "1.10.2"
 

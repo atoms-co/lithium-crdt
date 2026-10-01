@@ -42,7 +42,7 @@ import kotlin.random.Random
  * // Result: Actors(local_actor=12345, version_vector={12345: 1})
  * ```
  */
-fun Actors?.incrementLocalActor(actorGenerator: () -> Long = Random::nextLong): Actors {
+fun Actors?.incrementLocalActor(actorGenerator: () -> Long): Actors {
     this ?: return actorGenerator().let {
         Actors.newBuilder().setLocalActor(it).putVersionVector(it, 1L).build()
     }

@@ -84,10 +84,11 @@ interface MessageResolver<M, B, N, V, C, A> :
         currentNode: N?,
         currentActors: A?,
         newValue: M?,
-        timestamp: Long
+        timestamp: Long,
+        actorGenerator: () -> Long,
     ): ResolverDeltaResult<M, N, V, Boolean, C, A> = with(versionTreeResolver) {
         val context = ResolutionDeltaContext<N, C>()
-        val newActors = incrementLocalActor(currentActors)
+        val newActors = incrementLocalActor(currentActors, actorGenerator)
         val result = applyLocalWrite(
             currentValue = currentValue,
             currentNode = currentNode,

@@ -107,8 +107,8 @@ internal class ProtocMessageResolver(
         return localActors.merge(versionVector)
     }
 
-    override fun incrementLocalActor(actors: Actors?): Actors {
-        return actors.incrementLocalActor()
+    override fun incrementLocalActor(actors: Actors?, actorGenerator: () -> Long): Actors {
+        return actors.incrementLocalActor(actorGenerator)
     }
 
     override fun List<Version>.toVersionVector(): Map<Long, Long> {

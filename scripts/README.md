@@ -46,14 +46,17 @@ Opens a version-bump PR, then tags the merged master commit. The publish workflo
 ./scripts/release.sh tag
 ```
 
-**What the bump step does:**
+**What `./scripts/release.sh patch` does:**
 1. Checks that you are on `master`, the tree is clean, and `HEAD` matches `origin/master`
-2. Bumps `gradle.properties`
-3. Pushes `release/vX.Y.Z` and opens a PR into `master`
+2. Increments `gradle.properties` (`patch` by default, or `minor` / `major`)
+3. Commits that change on `release/vX.Y.Z`, pushes the branch, and opens a PR into `master`
+4. Does not create or push a tag
 
-**What the tag step does:**
-1. Reads the version already on `origin/master`
-2. Creates `vX.Y.Z` on that commit
-3. Pushes the tag only
+**What `./scripts/release.sh tag` does:**
+1. Fetches `origin/master`
+2. Reads `version.major`, `version.minor`, and `version.patch` from that commit’s `gradle.properties`
+3. Builds one tag name from those numbers, such as `v1.1.5`
+4. If that tag already exists, prints an error and exits
+5. If it does not, tags that `master` commit and pushes only the tag
 
-Tag the merged master commit, not the PR branch. A squash merge changes the SHA. If the tag already exists, the script refuses to move it.
+The tag push starts the publish workflow. This command does not increment the version and does not look up the bump PR. A bump that has not merged leaves the previous version in `gradle.properties`, so the tag name already exists and the command exits. Tag the merged `master` commit, not the PR branch: a squash merge changes the SHA.

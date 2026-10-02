@@ -2,6 +2,7 @@ package co.atoms.lithium.crdt.resolver
 
 import co.atoms.lithium.crdt.resolver.version.ApplyChangesResult
 import co.atoms.lithium.crdt.resolver.version.ResolutionStrategy
+import kotlin.random.Random
 
 /**
  * Combined interface for full CRDT message operations.
@@ -58,6 +59,9 @@ interface CrdtMessageLocalResolver<T, N, V, C, A> {
      * @param currentActors The current actor state with version vector (null initializes new actor state)
      * @param newValue The new value to write (null to delete/tombstone the document)
      * @param timestamp The timestamp component for the new version (typically wall clock time)
+     * @param actorGenerator Supplies a new actor ID when one must be minted (no existing actor state, or
+     *        a zero/unset local actor). Defaults to [Random.nextLong]. Apps that need a stable per-device
+     *        actor identity should pass their own supplier here rather than relying on the random default.
      * @return Result containing:
      *         - `mergeResult.resolution`: true if any field changed, false if values were identical
      *         - `mergeResult.value`: The written value (same as newValue)
@@ -71,6 +75,7 @@ interface CrdtMessageLocalResolver<T, N, V, C, A> {
         currentActors: A?,
         newValue: T?,
         timestamp: Long,
+        actorGenerator: () -> Long = Random::nextLong,
     ): ResolverDeltaResult<T, N, V, Boolean, C, A>
 }
 

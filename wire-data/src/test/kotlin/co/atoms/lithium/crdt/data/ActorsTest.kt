@@ -3,6 +3,7 @@ package co.atoms.lithium.crdt.data
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotEquals
 import org.junit.jupiter.api.Test
+import kotlin.random.Random
 
 class ActorsTest {
     @Test
@@ -21,7 +22,7 @@ class ActorsTest {
     @Test
     fun `incrementLocalActor - null actors uses random generator by default`() {
         // Given/When
-        val result = null.incrementLocalActor()
+        val result = null.incrementLocalActor(Random::nextLong)
 
         // Then
         assertNotEquals(0L, result.local_actor, "Should generate non-zero actor ID")
@@ -39,7 +40,7 @@ class ActorsTest {
             )
 
         // When
-        val result = actors.incrementLocalActor()
+        val result = actors.incrementLocalActor(Random::nextLong)
 
         // Then
         assertEquals(100L, result.local_actor, "Should preserve local actor ID")
@@ -60,9 +61,9 @@ class ActorsTest {
             )
 
         // When - increment 3 times
-        actors = actors.incrementLocalActor()
-        actors = actors.incrementLocalActor()
-        actors = actors.incrementLocalActor()
+        actors = actors.incrementLocalActor(Random::nextLong)
+        actors = actors.incrementLocalActor(Random::nextLong)
+        actors = actors.incrementLocalActor(Random::nextLong)
 
         // Then
         assertEquals(100L, actors.local_actor, "Should preserve local actor ID")
@@ -307,8 +308,8 @@ class ActorsTest {
             )
 
         // When - each device makes local changes
-        device1 = device1.incrementLocalActor() // Device 1: 100->6
-        device2 = device2.incrementLocalActor() // Device 2: 200->7
+        device1 = device1.incrementLocalActor(Random::nextLong) // Device 1: 100->6
+        device2 = device2.incrementLocalActor(Random::nextLong) // Device 2: 200->7
 
         // Then - verify increments
         assertEquals(mapOf(100L to 6L, 200L to 3L), device1.version_vector)

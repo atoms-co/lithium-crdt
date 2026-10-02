@@ -31,21 +31,29 @@ Increments the version in `gradle.properties` following semantic versioning.
 3. Updates `gradle.properties` with new version
 4. Displays next steps for committing and publishing
 
-**Note:** This script only updates the local file. You must commit and push the changes:
+**Note:** This script only updates the local file. Publish through `release.sh` so the bump lands on master through a PR. Master rejects direct pushes.
 
+## release.sh
+
+Opens a version-bump PR, then tags the merged master commit. The publish workflow runs on tags matching `v*`.
+
+**Usage:**
 ```bash
-./scripts/bump-version.sh minor
-git add gradle.properties
-git commit -m "Bump version to 1.1.0"
-git push
+# On an up-to-date master: bump, push a release branch, open a PR
+./scripts/release.sh [major|minor|patch]
+
+# After that PR squash-merges: tag origin/master and push only the tag
+./scripts/release.sh tag
 ```
 
-**CI Integration:** The GitHub Actions publish workflow is triggered by pushing a version tag (`v*`). After bumping the version locally, tag and push to trigger a release:
-```bash
-./scripts/bump-version.sh minor
-git add gradle.properties
-git commit -m "Bump version to 1.1.0"
-git push
-git tag v1.1.0
-git push origin v1.1.0
-```
+**What the bump step does:**
+1. Checks that you are on `master`, the tree is clean, and `HEAD` matches `origin/master`
+2. Bumps `gradle.properties`
+3. Pushes `release/vX.Y.Z` and opens a PR into `master`
+
+**What the tag step does:**
+1. Reads the version already on `origin/master`
+2. Creates `vX.Y.Z` on that commit
+3. Pushes the tag only
+
+Tag the merged master commit, not the PR branch. A squash merge changes the SHA. If the tag already exists, the script refuses to move it.

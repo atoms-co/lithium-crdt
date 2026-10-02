@@ -67,8 +67,7 @@ echo "✓ Version bumped to $NEW_VERSION in gradle.properties"
 if [ "$QUIET" = false ]; then
     echo ""
     echo "Next steps:"
+    echo "  Prefer ./scripts/release.sh, which opens a PR and tags only after merge."
     echo "  1. Review the changes: git diff gradle.properties"
-    echo "  2. Commit the version bump: git add gradle.properties && git commit -m \"Bump version to $NEW_VERSION\""
-    echo "  3. Push to remote: git push"
-    echo "  4. Tag and push to trigger publish: git tag v$NEW_VERSION && git push origin v$NEW_VERSION"
+    echo "  2. Or restore this file and run: ./scripts/release.sh $BUMP_TYPE"
 fi

@@ -27,13 +27,12 @@ Publishes library artifacts to Maven Central. Triggered automatically when a ver
 
 ## Releasing a New Version
 
-Releases are initiated manually by a maintainer using `scripts/release.sh`:
+`master` is protected, so the version bump goes through a pull request like any other change.
 
-```bash
-./scripts/release.sh patch   # or minor, major
-```
+1. Bump the version in `gradle.properties` in a PR and merge it.
+2. Run `./scripts/release.sh`. It reads the version from `gradle.properties` on `origin/master`, tags that commit and pushes the tag.
 
-The script ensures you're on a clean, up-to-date `master`, bumps the version, confirms before proceeding, then commits, tags, and pushes, ultimately triggering the publish workflow.
+Pushing the tag triggers the publish workflow, which builds whatever commit the tag points to. Only tag after the bump is merged, and don't use `git push origin master --tags`.
 
 All five modules are always published with the same version.
 

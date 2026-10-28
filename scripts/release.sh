@@ -1,68 +1,37 @@
 #!/bin/bash
 set -e
 
-# Release script: bumps version, commits, tags, and pushes to trigger the publish workflow.
-# Usage: ./scripts/release.sh [major|minor|patch]
+# Tags origin/master with the version in its gradle.properties and pushes the tag,
+# which triggers the publish workflow. Bump the version in a PR and merge it first.
+# Usage: ./scripts/release.sh
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
-GRADLE_PROPERTIES="$PROJECT_DIR/gradle.properties"
+git fetch origin --tags
 
-BUMP_TYPE="${1:-patch}"
+props=$(git show origin/master:gradle.properties)
+major=$(echo "$props" | grep '^version\.major=' | cut -d= -f2)
+minor=$(echo "$props" | grep '^version\.minor=' | cut -d= -f2)
+patch=$(echo "$props" | grep '^version\.patch=' | cut -d= -f2)
+version="$major.$minor.$patch"
 
-if [[ ! "$BUMP_TYPE" =~ ^(major|minor|patch)$ ]]; then
-    echo "Usage: $0 [major|minor|patch]"
+if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+    echo "Error: could not read version from gradle.properties on origin/master (got '$version')"
     exit 1
 fi
 
-cd "$PROJECT_DIR"
-
-# Ensure we're on master and clean
-BRANCH=$(git rev-parse --abbrev-ref HEAD)
-if [ "$BRANCH" != "master" ]; then
-    echo "Error: must be on master branch (currently on '$BRANCH')"
+if git rev-parse -q --verify "refs/tags/v$version" >/dev/null; then
+    echo "Error: tag v$version already exists. Bump the version in a PR first."
     exit 1
 fi
 
-if [ -n "$(git status --porcelain)" ]; then
-    echo "Error: working tree is not clean. Commit or stash changes first."
-    exit 1
-fi
-
-git fetch origin master
-LOCAL=$(git rev-parse HEAD)
-REMOTE=$(git rev-parse origin/master)
-if [ "$LOCAL" != "$REMOTE" ]; then
-    echo "Error: local master is not up to date with origin. Pull first."
-    exit 1
-fi
-
-# Bump version
-"$SCRIPT_DIR/bump-version.sh" "$BUMP_TYPE" --quiet
-
-MAJOR=$(grep "^version.major=" "$GRADLE_PROPERTIES" | cut -d'=' -f2)
-MINOR=$(grep "^version.minor=" "$GRADLE_PROPERTIES" | cut -d'=' -f2)
-PATCH=$(grep "^version.patch=" "$GRADLE_PROPERTIES" | cut -d'=' -f2)
-VERSION="$MAJOR.$MINOR.$PATCH"
-
-echo ""
-echo "Ready to release v$VERSION ($BUMP_TYPE bump)"
-echo ""
+echo "Release v$version from origin/master ($(git rev-parse --short origin/master))?"
 read -p "Continue? [y/N] " -n 1 -r
 echo ""
-
 if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-    git checkout -- gradle.properties
     echo "Aborted."
     exit 1
 fi
 
-# Commit, tag, and push
-git add gradle.properties
-git commit -m "Bump version to $VERSION"
-git tag "v$VERSION"
-git push origin master --tags
+git tag "v$version" origin/master
+git push origin "v$version"
 
-echo ""
-echo "Released v$VERSION — publish workflow triggered."
-echo "Monitor: https://github.com/atoms-co/lithium-crdt/actions/workflows/publish.yml"
+echo "Pushed v$version. Monitor: https://github.com/atoms-co/lithium-crdt/actions/workflows/publish.yml"

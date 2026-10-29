@@ -27,9 +27,9 @@ Publishes library artifacts to Maven Central. Triggered automatically when a ver
 
 ## Releasing a New Version
 
-`master` is protected, so the version bump goes through a pull request like any other change.
+`master` is protected, so the version bump goes through a pull request like any other change. Keep the bump in its own PR so version cuts are easy to find in the list of closed PRs.
 
-1. Bump the version in `gradle.properties` in a PR and merge it.
+1. Bump the version in `gradle.properties` in its own PR, with no other changes, and merge it.
 2. Run `./scripts/release.sh`. It reads the version from `gradle.properties` on `origin/master`, tags that commit and pushes the tag.
 
 Pushing the tag triggers the publish workflow, which builds whatever commit the tag points to. Only tag after the bump is merged, and don't use `git push origin master --tags`.

@@ -203,7 +203,7 @@ Contributions welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for details.
 
 ## Releasing
 
-1. Bump the version in [`gradle.properties`](gradle.properties) in a PR and merge it.
+1. Bump the version in [`gradle.properties`](gradle.properties) in its own PR, with no other changes, and merge it.
 2. Run `./scripts/release.sh` to tag `origin/master` with the new version and push the tag.
 
 The tag triggers the [publish workflow](.github/workflows/publish.yml). See [ci/README.md](ci/README.md#releasing-a-new-version) for details.

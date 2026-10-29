@@ -120,7 +120,7 @@ This repository uses **Gradle 9.2.1 with Kotlin DSL**. All dependencies are mana
 CI runs via GitHub Actions. See `.github/workflows/` for workflow definitions and `ci/README.md` for documentation.
 
 - **CI build & test**: Runs automatically on push to `master` and on pull requests.
-- **Publish**: Triggered by pushing a version tag (`v*`).
+- **Publish**: Triggered by pushing a version tag (`v*`). Bump the version in `gradle.properties` in its own PR, then run `./scripts/release.sh` after it merges. See `ci/README.md`.
 
 ### Maven Publishing Configuration
 

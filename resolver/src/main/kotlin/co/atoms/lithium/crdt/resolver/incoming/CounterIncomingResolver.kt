@@ -51,12 +51,24 @@ interface CounterIncomingResolver<T, N, V, C> : CrdtIncomingResolver<T, N, V, C>
 
             val localValueLong = toLong(localValue)
             val incomingValueLong = toLong(incomingValue)
-            // Ensure incoming has a counter node structure for merging
+            // Ensure incoming has a counter node structure for merging. A side without a
+            // counter node at minVersion was never written (see MessageIncomingResolver),
+            // so it contributes no actor: wrapping it would add a phantom minVersion actor
+            // that only the merging replica keeps, and the replicas' trees never converge.
             val incomingNode = incomingNode?.takeIf { it.counterActors > 0 }
-                ?: createVersionNodeCounter(incomingVersion, incomingValueLong)
+                ?: createVersionNodeCounter(incomingVersion, incomingValueLong).takeUnless { incomingVersion == minVersion }
             // Convert single-actor local to counter structure if needed for merging
             val localNode = localNode?.takeIf { it.counterActors > 0 }
-                ?: createVersionNodeCounter(localVersion, localValueLong)
+                ?: createVersionNodeCounter(localVersion, localValueLong).takeUnless { localVersion == minVersion }
+
+            if (incomingNode == null) {
+                // Incoming never wrote this counter, so local already has every contribution
+                return NodeMergeResult(
+                    value = localValue,
+                    node = localNode ?: createVersionNode(localVersion),
+                    resolution = if (localNode == null) ResolutionStrategy.NO_CHANGE else ResolutionStrategy.LOCAL,
+                )
+            }
 
             // Merge per-actor version vectors, taking highest version for each actor
             // Uses structural equality (data class) to determine resolution strategy

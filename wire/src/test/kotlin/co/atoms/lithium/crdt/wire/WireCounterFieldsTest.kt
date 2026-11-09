@@ -137,6 +137,109 @@ class WireCounterFieldsTest {
     }
 
     @Test
+    fun `counterValue - merging into a replica that never wrote the counter adds no phantom actor`() {
+        // Given - two replicas with independent genesis writes to another field
+        val replicaA = adapter.applyLocalWrite(
+            currentValue = null,
+            currentNode = null,
+            currentActors = null,
+            newValue = TestMessage(stringValue = "a"),
+            timestamp = 1L,
+            actorGenerator = { 100L },
+        )
+        val replicaB = adapter.applyLocalWrite(
+            currentValue = null,
+            currentNode = null,
+            currentActors = null,
+            newValue = TestMessage(stringValue = "b"),
+            timestamp = 1L,
+            actorGenerator = { 200L },
+        )
+
+        // And - only replica A writes the counter
+        val replicaA2 = adapter.applyLocalWrite(
+            currentValue = replicaA.mergeResult.value,
+            currentNode = replicaA.mergeResult.node,
+            currentActors = replicaA.actors,
+            newValue = replicaA.mergeResult.value!!.copy(counterValue = 3L),
+            timestamp = 2L,
+        )
+
+        // When - B merges A, then A merges B back
+        val replicaB2 = adapter.resolveConflict(lhs = replicaB, rhs = replicaA2)
+        val replicaA3 = adapter.resolveConflict(lhs = replicaA2, rhs = replicaB2)
+        val replicaB3 = adapter.resolveConflict(lhs = replicaB2, rhs = replicaA3)
+
+        // Then - B's counter only has A's contribution: no minVersion actor
+        val minActor = Long.MIN_VALUE
+        assertThat(replicaB2.mergeResult.value?.counterValue).isEqualTo(3L)
+        assertThat(replicaB2.mergeResult.node?.struct?.fields?.get(31)?.counter?.actor_count?.keys ?: emptySet<Long>())
+            .doesNotContain(minActor)
+
+        // And - both replicas converge on the same value and version tree
+        assertThat(replicaB3.mergeResult.value).isEqualTo(replicaA3.mergeResult.value)
+        assertThat(replicaB3.mergeResult.node).isEqualTo(replicaA3.mergeResult.node)
+    }
+
+    @Test
+    fun `counterValue - incrementing a merged counter keeps the other actor's contribution`() {
+        // Ties between equal timestamps are broken by actor ID, so check both orders
+        for ((actorA, actorB) in listOf(100L to 200L, 200L to 100L)) {
+            // Given - two replicas with independent genesis writes to another field
+            val replicaA = adapter.applyLocalWrite(
+                currentValue = null,
+                currentNode = null,
+                currentActors = null,
+                newValue = TestMessage(stringValue = "a"),
+                timestamp = 1L,
+                actorGenerator = { actorA },
+            )
+            val replicaB = adapter.applyLocalWrite(
+                currentValue = null,
+                currentNode = null,
+                currentActors = null,
+                newValue = TestMessage(stringValue = "b"),
+                timestamp = 1L,
+                actorGenerator = { actorB },
+            )
+            val replicaA2 = adapter.applyLocalWrite(
+                currentValue = replicaA.mergeResult.value,
+                currentNode = replicaA.mergeResult.node,
+                currentActors = replicaA.actors,
+                newValue = replicaA.mergeResult.value!!.copy(stringValue = "a2"),
+                timestamp = 2L,
+            )
+
+            // And - B adds 2 to the counter and A merges it
+            val replicaB2 = adapter.applyLocalWrite(
+                currentValue = replicaB.mergeResult.value,
+                currentNode = replicaB.mergeResult.node,
+                currentActors = replicaB.actors,
+                newValue = replicaB.mergeResult.value!!.copy(counterValue = 2L),
+                timestamp = 2L,
+            )
+            val replicaA3 = adapter.resolveConflict(lhs = replicaA2, rhs = replicaB2)
+            assertThat(replicaA3.mergeResult.value?.counterValue).isEqualTo(2L)
+
+            // When - A adds 5 on top (2 -> 7) and the replicas exchange state
+            val replicaA4 = adapter.applyLocalWrite(
+                currentValue = replicaA3.mergeResult.value,
+                currentNode = replicaA3.mergeResult.node,
+                currentActors = replicaA3.actors,
+                newValue = replicaA3.mergeResult.value!!.copy(counterValue = 7L),
+                timestamp = 3L,
+            )
+            val replicaB3 = adapter.resolveConflict(lhs = replicaB2, rhs = replicaA4)
+            val replicaA5 = adapter.resolveConflict(lhs = replicaA4, rhs = replicaB3)
+
+            // Then - both replicas count 2 + 5 = 7, not 2 + 7 = 9
+            assertThat(replicaA5.mergeResult.value?.counterValue).isEqualTo(7L)
+            assertThat(replicaB3.mergeResult.value?.counterValue).isEqualTo(7L)
+            assertThat(replicaB3.mergeResult.node).isEqualTo(replicaA5.mergeResult.node)
+        }
+    }
+
+    @Test
     fun `counterValue - three consecutive writes then merge preserves accumulated value`() {
         // Write 1: Create message with counter=10
         val delta1 = adapter.applyLocalWrite(

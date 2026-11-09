@@ -60,7 +60,7 @@ interface CounterLocalResolver<T, N, V, C> : CrdtLocalResolver<T, N, V, C> {
                 existing
             }
             prepared.plus(value = difference, version = finalVersion)
-        } ?: createVersionNode(version = finalVersion)
+        } ?: inheritedCounterNode(currentValue, currentVersion, difference, finalVersion)
 
         context.addChange(
             newValue = newValue,
@@ -74,4 +74,21 @@ interface CounterLocalResolver<T, N, V, C> : CrdtLocalResolver<T, N, V, C> {
             node = node,
         )
     }
+
+    /**
+     * Node for a counter that has no node of its own. Leaf collapse drops a single-actor
+     * counter's node when its version matches the parent's, so the counter can still hold a
+     * value written by the actor of the inherited [currentVersion]. Keep that contribution
+     * under its actor instead of folding it into the local actor's count, which would double
+     * count it on replicas that still track the original actor.
+     */
+    private fun inheritedCounterNode(currentValue: T?, currentVersion: V, difference: Long, finalVersion: V): N =
+        with(versionTreeResolver) {
+            val currentValueLong = toLong(currentValue)
+            if (currentValueLong == 0L) return createVersionNode(version = finalVersion)
+            createVersionNodeCounter(currentVersion, currentValueLong)
+                .plus(value = difference, version = finalVersion)
+                .takeIf { it.counterActors > 1 }
+                ?: createVersionNode(version = finalVersion)
+        }
 }

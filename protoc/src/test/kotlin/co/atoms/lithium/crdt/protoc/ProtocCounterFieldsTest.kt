@@ -213,6 +213,73 @@ class ProtocCounterFieldsTest {
     }
 
     @Test
+    fun `counterValue - incrementing a merged counter keeps the other actor's contribution`() {
+        // Ties between equal timestamps are broken by actor ID, so check both orders
+        for ((actorA, actorB) in listOf(100L to 200L, 200L to 100L)) {
+            val replicaA = resolver.applyLocalWrite(
+                currentValue = null,
+                currentNode = null,
+                currentActors = null,
+                newValue = TestMessage.newBuilder().setStringValue("a").build(),
+                timestamp = 1L,
+                actorGenerator = { actorA },
+            )
+            val replicaB = resolver.applyLocalWrite(
+                currentValue = null,
+                currentNode = null,
+                currentActors = null,
+                newValue = TestMessage.newBuilder().setStringValue("b").build(),
+                timestamp = 1L,
+                actorGenerator = { actorB },
+            )
+            val replicaA2 = resolver.applyLocalWrite(
+                currentValue = replicaA.mergeResult.value,
+                currentNode = replicaA.mergeResult.node,
+                currentActors = replicaA.actors,
+                newValue = replicaA.mergeResult.value!!.toBuilder().setStringValue("a2").build(),
+                timestamp = 2L,
+            )
+            val replicaB2 = resolver.applyLocalWrite(
+                currentValue = replicaB.mergeResult.value,
+                currentNode = replicaB.mergeResult.node,
+                currentActors = replicaB.actors,
+                newValue = replicaB.mergeResult.value!!.toBuilder().setCounterValue(2L).build(),
+                timestamp = 2L,
+            )
+            val replicaA3 = resolver.resolveConflict(
+                localValue = replicaA2.mergeResult.value,
+                localNode = replicaA2.mergeResult.node,
+                localActors = replicaA2.actors,
+                incomingValue = replicaB2.mergeResult.value,
+                incomingNode = requireNotNull(replicaB2.mergeResult.node),
+                incomingVersionVector = replicaB2.actors.versionVectorMap,
+            )
+            assertThat(replicaA3.mergeResult.value?.counterValue).isEqualTo(2L)
+
+            // A adds 5 on top (2 -> 7), then B merges A
+            val replicaA4 = resolver.applyLocalWrite(
+                currentValue = replicaA3.mergeResult.value,
+                currentNode = replicaA3.mergeResult.node,
+                currentActors = replicaA3.actors,
+                newValue = replicaA3.mergeResult.value!!.toBuilder().setCounterValue(7L).build(),
+                timestamp = 3L,
+            )
+            val replicaB3 = resolver.resolveConflict(
+                localValue = replicaB2.mergeResult.value,
+                localNode = replicaB2.mergeResult.node,
+                localActors = replicaB2.actors,
+                incomingValue = replicaA4.mergeResult.value,
+                incomingNode = requireNotNull(replicaA4.mergeResult.node),
+                incomingVersionVector = replicaA4.actors.versionVectorMap,
+            )
+
+            // Both replicas count 2 + 5 = 7, not 2 + 7 = 9
+            assertThat(replicaA4.mergeResult.value?.counterValue).isEqualTo(7L)
+            assertThat(replicaB3.mergeResult.value?.counterValue).isEqualTo(7L)
+        }
+    }
+
+    @Test
     fun `counterValue - three consecutive writes then merge preserves accumulated value`() {
         // Write 1: Create message with counter=10
         val delta1 = resolver.applyLocalWrite(

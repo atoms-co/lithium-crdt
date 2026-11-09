@@ -158,6 +158,61 @@ class ProtocCounterFieldsTest {
     }
 
     @Test
+    fun `counterValue - merging into a replica that never wrote the counter adds no phantom actor`() {
+        // Given - two replicas with independent genesis writes to another field
+        val replicaA = resolver.applyLocalWrite(
+            currentValue = null,
+            currentNode = null,
+            currentActors = null,
+            newValue = TestMessage.newBuilder().setStringValue("a").build(),
+            timestamp = 1L,
+        )
+        val replicaB = resolver.applyLocalWrite(
+            currentValue = null,
+            currentNode = null,
+            currentActors = null,
+            newValue = TestMessage.newBuilder().setStringValue("b").build(),
+            timestamp = 1L,
+        )
+
+        // And - only replica A writes the counter
+        val replicaA2 = resolver.applyLocalWrite(
+            currentValue = replicaA.mergeResult.value,
+            currentNode = replicaA.mergeResult.node,
+            currentActors = replicaA.actors,
+            newValue = replicaA.mergeResult.value!!.toBuilder().setCounterValue(3L).build(),
+            timestamp = 2L,
+        )
+
+        // When - B merges A, then A merges B back
+        val replicaB2 = resolver.resolveConflict(
+            localValue = replicaB.mergeResult.value,
+            localNode = replicaB.mergeResult.node,
+            localActors = replicaB.actors,
+            incomingValue = replicaA2.mergeResult.value,
+            incomingNode = requireNotNull(replicaA2.mergeResult.node),
+            incomingVersionVector = replicaA2.actors.versionVectorMap,
+        )
+        val replicaA3 = resolver.resolveConflict(
+            localValue = replicaA2.mergeResult.value,
+            localNode = replicaA2.mergeResult.node,
+            localActors = replicaA2.actors,
+            incomingValue = replicaB2.mergeResult.value,
+            incomingNode = requireNotNull(replicaB2.mergeResult.node),
+            incomingVersionVector = replicaB2.actors.versionVectorMap,
+        )
+
+        // Then - B's counter only has A's contribution: no minVersion actor
+        assertThat(replicaB2.mergeResult.value?.counterValue).isEqualTo(3L)
+        val counterActors = replicaB2.mergeResult.node?.struct?.fieldsMap?.get(31)?.counter?.actorCountMap?.keys
+        assertThat(counterActors ?: emptySet<Long>()).doesNotContain(Long.MIN_VALUE)
+
+        // And - both replicas converge on the same value and version tree
+        assertThat(replicaB2.mergeResult.value).isEqualTo(replicaA3.mergeResult.value)
+        assertThat(replicaB2.mergeResult.node).isEqualTo(replicaA3.mergeResult.node)
+    }
+
+    @Test
     fun `counterValue - three consecutive writes then merge preserves accumulated value`() {
         // Write 1: Create message with counter=10
         val delta1 = resolver.applyLocalWrite(
